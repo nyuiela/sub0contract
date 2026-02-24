@@ -12,8 +12,8 @@ import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
-import {IReceiver} from "../interfaces/IReceiver.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {ReceiverTemplate} from "../interfaces/ReceiverTemplate.sol";
 
 /**
  * @title Sub0
@@ -21,7 +21,7 @@ import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
  * @dev Implements IReceiver for CRE: set CRE Forwarder via setCreForwarderAddress and grant it GAME_CREATOR_ROLE for Public markets.
  *      After upgrade: (1) setCreForwarderAddress(chainForwarder), (2) grant GAME_CREATOR_ROLE to that forwarder.
  */
-contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationManager, IReceiver {
+contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationManager, ReceiverTemplate {
     bytes32 public constant ORACLE = keccak256("ORACLE");
     bytes32 public constant TOKENS = keccak256("TOKENS");
     bytes32 public constant GAME_CREATOR_ROLE = keccak256("GAME_CREATOR_ROLE");
@@ -59,6 +59,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         address permissionManager;
         address conditionalToken;
         address predictionVault;
+        address creForwarder;
     }
 
     enum OracleType {
@@ -122,12 +123,14 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         if (_config.permissionManager == address(0)) revert ZeroAddress();
         if (_config.hub == address(0)) revert ZeroAddress();
         __Ownable_init(msg.sender);
+        __ReceiverTemplate_init(msg.sender, _config.creForwarder);
         tokenManager = ITokensManager(_config.tokenManager);
         hub = IHub(_config.hub);
         vault = IVault(_config.vault);
         permissionManager = IPermissionManager(_config.permissionManager);
         conditionalToken = _config.conditionalToken;
         predictionVault = IPredictionVault(_config.predictionVault);
+        _creForwarderAddress = _config.creForwarder;
     }
 
     function create(Market memory market) public onlyValidMarket(market) returns (bytes32) {
@@ -205,37 +208,8 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         }
     }
 
-    // -------------------------------------------------------------------------
-    // CRE receiver (IReceiver): Forwarder calls onReport -> _processReport -> create
-    // Grant GAME_CREATOR_ROLE to the CRE Forwarder for Public market creation.
-    // -------------------------------------------------------------------------
-
-    function getCreForwarderAddress() external view returns (address) {
-        return _creForwarderAddress;
-    }
-
-    function setCreForwarderAddress(address _forwarder) external onlyOwner {
-        _creForwarderAddress = _forwarder;
-    }
-
-    /// @inheritdoc IReceiver
-    function onReport(bytes calldata /* metadata */, bytes calldata report) external override {
-        if (_creForwarderAddress == address(0)) revert CREForwarderNotSet();
-        if (msg.sender != _creForwarderAddress) revert CREInvalidSender(msg.sender, _creForwarderAddress);
-        _processReport(report);
-    }
-
-    /// @dev Decodes CRE report as create(Market) calldata and calls create. Report = selector (4 bytes) + abi.encode(Market).
-    function _processReport(bytes calldata report) internal {
-        if (report.length < 4) revert CREReportTooShort();
-        Market memory m = abi.decode(report[4:], (Market));
-        create(m);
-    }
-
-    /// @inheritdoc IERC165
-    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
-        return interfaceId == type(IReceiver).interfaceId || interfaceId == type(IERC165).interfaceId;
-    }
+    /// @dev Sub0 does not process CRE reports; no-op to satisfy ReceiverTemplate.
+    function _processReport(bytes calldata) internal override {}
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

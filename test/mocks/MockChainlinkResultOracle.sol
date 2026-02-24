@@ -144,8 +144,7 @@ contract MockChainlinkResultOracle is Ownable {
         // bytes memory response = abi.encode(resultIndex, (uint256[]));
         bytes memory response = abi.encode(resultIndex);
 
-        // Fulfill the result in Oracle
-        resultOracle.requestResult(info.game, info.questionId, response);
+        // Fulfill the result in Oracle (do not create a new request; use existing one)
         resultOracle.fulfillResult(info.questionId, resultIndex, response);
 
         emit ChainlinkRequestFulfilled(chainlinkRequestId, internalRequestId, resultIndex);
