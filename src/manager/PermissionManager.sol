@@ -17,7 +17,7 @@ contract PermissionManager is AccessControl, Initializable {
 
     // modifiers
     modifier onlyOracle(address oracle) {
-        require(oracles[oracle][ORACLE_MANAGER_ROLE], NotAuthorized(oracle, ORACLE_MANAGER_ROLE));
+        if (!oracles[oracle][ORACLE_MANAGER_ROLE]) revert NotAuthorized(oracle, ORACLE_MANAGER_ROLE);
         _;
     }
 

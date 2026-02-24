@@ -40,23 +40,20 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
     // modifiers
 
     modifier onlyValidBet(Bet memory bet) {
-        // require(bet.question != bytes32(0), InvalidQuestion(bet.question));
-        require(bet.outcomeSlotCount > 0, InvalidOutcomeSlotCount(bet.outcomeSlotCount));
-        require(bet.betDuration > 0, InvalidBetDuration(bet.betDuration));
-        require(bet.outcomeSlotCount >= 2 && bet.outcomeSlotCount <= 255, InvalidOutcomeSlotCount(bet.outcomeSlotCount));
+        if (bet.outcomeSlotCount == 0) revert InvalidOutcomeSlotCount(bet.outcomeSlotCount);
+        if (bet.betDuration == 0) revert InvalidBetDuration(bet.betDuration);
+        if (bet.outcomeSlotCount < 2 || bet.outcomeSlotCount > 255) revert InvalidOutcomeSlotCount(bet.outcomeSlotCount);
         _;
     }
-    //m
 
     modifier onlyValidStake(bytes32 _questionId, address _token, uint256 amount) {
-        require(_questionId != bytes32(0), InvalidQuestionId(_questionId));
-        require(_token != address(0), ZeroAddress());
-        require(tokensManager.allowedTokens(_token), TokenNotAllowedListed(_token));
+        if (_questionId == bytes32(0)) revert InvalidQuestionId(_questionId);
+        if (_token == address(0)) revert ZeroAddress();
+        if (!tokensManager.allowedTokens(_token)) revert TokenNotAllowedListed(_token);
         _;
     }
 
-    // errors
-    // error InvalidQuestionId(bytes32 questionId);
+    // errors (InvalidQuestionId from InvitationManager)
     error InvalidQuestion(string question);
     error InvalidOutcomeSlotCount(uint256 outcomeSlotCount);
     error InvalidBetDuration(uint256 betDuration);
@@ -85,9 +82,9 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         address _vault,
         address _collateralToken
     ) public initializer {
-        require(_conditionalTokens != address(0), ZeroAddress());
-        require(_vault != address(0), ZeroAddress());
-        require(_tokensManager != address(0), ZeroAddress());
+        if (_conditionalTokens == address(0)) revert ZeroAddress();
+        if (_vault == address(0)) revert ZeroAddress();
+        if (_tokensManager == address(0)) revert ZeroAddress();
         __Ownable_init(msg.sender);
         conditionalTokens = IConditionalTokens(_conditionalTokens);
         tokensManager = ITokensManager(_tokensManager);
@@ -99,10 +96,9 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
     function createBet(Bet memory bet) public onlyValidBet(bet) returns (bytes32) {
         // authenticate the oracle
         bytes32 questionId = keccak256(abi.encodePacked(bet.question, msg.sender, bet.oracle));
-        require(bets[questionId].owner == address(0), QuestionAlreadyExists(questionId));
+        if (bets[questionId].owner != address(0)) revert QuestionAlreadyExists(questionId);
 
-        // validate the oracle
-        require(hub.isAllowed(bet.oracle, ORACLE), OracleNotAllowed(bet.oracle));
+        if (!hub.isAllowed(bet.oracle, ORACLE)) revert OracleNotAllowed(bet.oracle);
 
         // prepare the condition
         conditionalTokens.prepareCondition(bet.oracle, questionId, bet.outcomeSlotCount); // faulty
@@ -116,7 +112,7 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         return questionId;
     }
 
-    function stake(bytes32 questionId, address token, uint256 amount, uint256 optionIndex)
+    function stake(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
         public
         onlyValidStake(questionId, token, amount)
     {
@@ -129,7 +125,7 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         );
     }
 
-    function unstake(bytes32 questionId, address token, uint256 amount, uint256 optionIndex)
+    function unstake(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
         public
         onlyValidStake(questionId, token, amount)
     {
@@ -138,7 +134,7 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         conditionalTokens.mergePositions(IERC20(token), bytes32(0), bets[questionId].conditionId, partition, amount);
     }
 
-    function redeem(bytes32 questionId, address token, uint256 amount, uint256 optionIndex)
+    function redeem(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
         public
         onlyValidStake(questionId, token, amount)
     {

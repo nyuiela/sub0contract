@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {IConditionalTokens} from "../conditional/IConditionalTokens.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {PermissionManager} from "./permissionManager.sol";
+import {PermissionManager} from "./PermissionManager.sol";
 import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {ITokensManager} from "../interfaces/ITokensManager.sol";
 
@@ -21,23 +21,23 @@ contract TokensManager is ITokensManager, Initializable {
 
     // modifiers
     modifier onlyValidToken(address token) {
-        require(token != address(0), ZeroAddress(token));
-        require(!bannedTokens[token], InvalidTokenBanned(token));
+        if (token == address(0)) revert ZeroAddress(token);
+        if (bannedTokens[token]) revert InvalidTokenBanned(token);
         _;
     }
 
     modifier onlyAuthorized(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
     modifier onlyValidPriceFeed(address _priceFeed) {
-        require(_priceFeed != address(0), ZeroAddress(_priceFeed));
+        if (_priceFeed == address(0)) revert ZeroAddress(_priceFeed);
         _;
     }
 
     function initialize(address _permissionManager, address _conditionalTokens) public initializer {
-        require(_conditionalTokens != address(0), ZeroAddress(_conditionalTokens));
+        if (_conditionalTokens == address(0)) revert ZeroAddress(_conditionalTokens);
         permissionManager = IPermissionManager(_permissionManager);
     }
 
