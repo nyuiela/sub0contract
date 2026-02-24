@@ -1,6 +1,7 @@
 set dotenv-load
 
 # Sub0 prediction market – Just recipes
+# Lib deps: use submodules only. After clone run: git submodule update --init --recursive
 
 rpc_sepolia := "https://sepolia.base.org"
 etherscan_api_key := "KZUFSFGHCEXRX2RITQI1PHX9SYEV6PGDQG"
@@ -11,6 +12,10 @@ deploy network="sepolia":
   forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
+
+# Install lib dependencies (submodules). Run after clone.
+deps:
+  git submodule update --init --recursive
 
 test:
   @echo "Running tests..."
