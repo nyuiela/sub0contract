@@ -12,12 +12,16 @@ import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import {ReceiverTemplate} from "../interfaces/ReceiverTemplate.sol";
 
 /**
  * @title Sub0
  * @notice Sub0 prediction market factory: creates markets, integrates with PredictionVault (inventory AMM) and ConditionalTokensV2.
+ * @dev Implements IReceiver for CRE: set CRE Forwarder via setCreForwarderAddress and grant it GAME_CREATOR_ROLE for Public markets.
+ *      After upgrade: (1) setCreForwarderAddress(chainForwarder), (2) grant GAME_CREATOR_ROLE to that forwarder.
  */
-contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationManager {
+contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationManager, ReceiverTemplate {
     bytes32 public constant ORACLE = keccak256("ORACLE");
     bytes32 public constant TOKENS = keccak256("TOKENS");
     bytes32 public constant GAME_CREATOR_ROLE = keccak256("GAME_CREATOR_ROLE");
@@ -30,6 +34,9 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     IPermissionManager public permissionManager;
     address public conditionalToken;
     IPredictionVault public predictionVault;
+
+    /// @notice Chainlink CRE Forwarder; only this address can call onReport. Set via setCreForwarderAddress.
+    address private _creForwarderAddress;
 
     mapping(bytes32 => Market) public markets;
 
@@ -52,6 +59,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         address permissionManager;
         address conditionalToken;
         address predictionVault;
+        address creForwarder;
     }
 
     enum OracleType {
@@ -62,24 +70,23 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     }
 
     modifier onlyValidMarket(Market memory market) {
-        require(bytes(market.question).length > 0, InvalidQuestion(market.question));
-        require(market.duration > 0, InvalidBetDuration(market.duration));
-        require(
-            market.outcomeSlotCount >= 2 && market.outcomeSlotCount <= 255,
-            InvalidOutcomeSlotCount(market.outcomeSlotCount)
-        );
+        if (bytes(market.question).length == 0) revert InvalidQuestion(market.question);
+        if (market.duration == 0) revert InvalidBetDuration(market.duration);
+        if (market.outcomeSlotCount < 2 || market.outcomeSlotCount > 255) {
+            revert InvalidOutcomeSlotCount(market.outcomeSlotCount);
+        }
         _;
     }
 
     modifier onlyRole(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
     modifier onlyValidStake(bytes32 _questionId, address _token, uint256 amount) {
-        require(_questionId != bytes32(0), InvalidQuestionId(_questionId));
-        require(_token != address(0), ZeroAddress());
-        require(tokenManager.allowedTokens(_token), TokenNotAllowedListed(_token));
+        if (_questionId == bytes32(0)) revert InvalidQuestionId(_questionId);
+        if (_token == address(0)) revert ZeroAddress();
+        if (!tokenManager.allowedTokens(_token)) revert TokenNotAllowedListed(_token);
         _;
     }
 
@@ -96,6 +103,9 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     error QuestionAlreadyExists(bytes32 questionId);
     error PublicBetNotAllowed();
     error NotAuthorized(address account, bytes32 role);
+    error CREInvalidSender(address sender, address expectedForwarder);
+    error CREReportTooShort();
+    error CREForwarderNotSet();
 
     event MarketCreated(
         bytes32 questionId,
@@ -109,21 +119,22 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     event Redeemed(bytes32 questionId, uint256[] indexSets, address token, uint256 amount);
 
     function initialize(Config memory _config) public initializer {
-        require(_config.vault != address(0), ZeroAddress());
-        require(_config.permissionManager != address(0), ZeroAddress());
-        require(_config.hub != address(0), ZeroAddress());
+        if (_config.vault == address(0)) revert ZeroAddress();
+        if (_config.permissionManager == address(0)) revert ZeroAddress();
+        if (_config.hub == address(0)) revert ZeroAddress();
         __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
+        __ReceiverTemplate_init(msg.sender, _config.creForwarder);
         tokenManager = ITokensManager(_config.tokenManager);
         hub = IHub(_config.hub);
         vault = IVault(_config.vault);
         permissionManager = IPermissionManager(_config.permissionManager);
         conditionalToken = _config.conditionalToken;
         predictionVault = IPredictionVault(_config.predictionVault);
+        _creForwarderAddress = _config.creForwarder;
     }
 
     function create(Market memory market) public onlyValidMarket(market) returns (bytes32) {
-        require(market.oracleType != OracleType.NONE, OracleNotAllowed(market.oracle));
+        if (market.oracleType == OracleType.NONE) revert OracleNotAllowed(market.oracle);
         if (
             !permissionManager.hasRole(GAME_CREATOR_ROLE, msg.sender)
                 && market.marketType == InvitationManager.InvitationType.Public
@@ -132,10 +143,10 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         }
 
         bytes32 questionId = keccak256(abi.encodePacked(market.question, msg.sender, market.oracle));
-        require(markets[questionId].owner == address(0), QuestionAlreadyExists(questionId));
+        if (markets[questionId].owner != address(0)) revert QuestionAlreadyExists(questionId);
 
         if (market.oracleType == OracleType.PLATFORM || market.oracleType == OracleType.CUSTOM) {
-            require(hub.isAllowed(market.oracle, ORACLE), OracleNotAllowed(market.oracle));
+            if (!hub.isAllowed(market.oracle, ORACLE)) revert OracleNotAllowed(market.oracle);
         }
         bytes32 conditionId = vault.prepareCondition(questionId, market.outcomeSlotCount);
         markets[questionId] = market;
@@ -174,7 +185,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     }
 
     function resolve(bytes32 questionId, uint256[] calldata payouts) public {
-        require(msg.sender == markets[questionId].oracle, NotAuthorized(msg.sender, ORACLE));
+        if (msg.sender != markets[questionId].oracle) revert NotAuthorized(msg.sender, ORACLE);
         vault.resolveCondition(questionId, payouts);
         emit BetResolved(questionId, payouts);
     }
@@ -196,6 +207,9 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
             predictionVault = IPredictionVault(_config.predictionVault);
         }
     }
+
+    /// @dev Sub0 does not process CRE reports; no-op to satisfy ReceiverTemplate.
+    function _processReport(bytes calldata) internal override {}
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

@@ -85,33 +85,31 @@ contract MeVsYouParimutuel is Initializable, UUPSUpgradeable, OwnableUpgradeable
     );
 
     modifier onlyValidMarket(Market memory market) {
-        require(bytes(market.question).length > 0, InvalidQuestion(market.question));
-        require(market.duration > 0, InvalidBetDuration(market.duration));
-        require(
-            market.outcomeSlotCount >= 2 && market.outcomeSlotCount <= 255,
-            InvalidOutcomeSlotCount(market.outcomeSlotCount)
-        );
+        if (bytes(market.question).length == 0) revert InvalidQuestion(market.question);
+        if (market.duration == 0) revert InvalidBetDuration(market.duration);
+        if (market.outcomeSlotCount < 2 || market.outcomeSlotCount > 255) {
+            revert InvalidOutcomeSlotCount(market.outcomeSlotCount);
+        }
         _;
     }
 
     modifier onlyRole(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
     modifier onlyValidStake(bytes32 _questionId, address _token, uint256 amount) {
         require(_questionId != bytes32(0), "Invalid questionId");
-        require(_token != address(0), ZeroAddress());
-        require(tokenManager.allowedTokens(_token), TokenNotAllowedListed(_token));
+        if (_token == address(0)) revert ZeroAddress();
+        if (!tokenManager.allowedTokens(_token)) revert TokenNotAllowedListed(_token);
         _;
     }
 
     function initialize(Config memory _config) public initializer {
-        require(_config.permissionManager != address(0), ZeroAddress());
-        require(_config.hub != address(0), ZeroAddress());
-        require(_config.parimutuelToken != address(0), ZeroAddress());
+        if (_config.permissionManager == address(0)) revert ZeroAddress();
+        if (_config.hub == address(0)) revert ZeroAddress();
+        if (_config.parimutuelToken == address(0)) revert ZeroAddress();
         __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
         tokenManager = ITokensManager(_config.tokenManager);
         hub = IHub(_config.hub);
         permissionManager = IPermissionManager(_config.permissionManager);
@@ -119,7 +117,7 @@ contract MeVsYouParimutuel is Initializable, UUPSUpgradeable, OwnableUpgradeable
     }
 
     function create(Market memory market) public onlyValidMarket(market) returns (bytes32) {
-        require(market.oracleType != OracleType.NONE, OracleNotAllowed(market.oracle));
+        if (market.oracleType == OracleType.NONE) revert OracleNotAllowed(market.oracle);
         if (
             !permissionManager.hasRole(GAME_CREATOR_ROLE, msg.sender)
                 && market.marketType == InvitationManager.InvitationType.Public
@@ -128,10 +126,10 @@ contract MeVsYouParimutuel is Initializable, UUPSUpgradeable, OwnableUpgradeable
         }
 
         bytes32 questionId = keccak256(abi.encodePacked(market.question, msg.sender, market.oracle));
-        require(markets[questionId].owner == address(0), QuestionAlreadyExists(questionId));
+        if (markets[questionId].owner != address(0)) revert QuestionAlreadyExists(questionId);
 
         if (market.oracleType == OracleType.PLATFORM || market.oracleType == OracleType.CUSTOM) {
-            require(hub.isAllowed(market.oracle, ORACLE), OracleNotAllowed(market.oracle));
+            if (!hub.isAllowed(market.oracle, ORACLE)) revert OracleNotAllowed(market.oracle);
         }
 
         parimutuelToken.prepareCondition(address(this), questionId, market.outcomeSlotCount);
@@ -154,7 +152,7 @@ contract MeVsYouParimutuel is Initializable, UUPSUpgradeable, OwnableUpgradeable
     {
         bytes32 conditionId = markets[questionId].conditionId;
         require(conditionId != bytes32(0), "Market not found");
-        require(outcomeIndex < markets[questionId].outcomeSlotCount, InvalidOptionIndex(outcomeIndex));
+        if (outcomeIndex >= markets[questionId].outcomeSlotCount) revert InvalidOptionIndex(outcomeIndex);
 
         parimutuelToken.stakeFor(msg.sender, conditionId, outcomeIndex, IERC20(token), amount);
         emit Staked(questionId, conditionId, msg.sender, outcomeIndex, amount);
@@ -174,8 +172,8 @@ contract MeVsYouParimutuel is Initializable, UUPSUpgradeable, OwnableUpgradeable
      * @param payouts Payout numerator per outcome (e.g. [1,0] single winner, [1,1] refund all, [1,1,0] two winners)
      */
     function resolve(bytes32 questionId, uint256[] calldata payouts) public {
-        require(msg.sender == markets[questionId].oracle, NotAuthorized(msg.sender, ORACLE));
-        require(payouts.length == markets[questionId].outcomeSlotCount, InvalidOptionIndex(payouts.length));
+        if (msg.sender != markets[questionId].oracle) revert NotAuthorized(msg.sender, ORACLE);
+        if (payouts.length != markets[questionId].outcomeSlotCount) revert InvalidOptionIndex(payouts.length);
 
         bytes32 conditionId = markets[questionId].conditionId;
         parimutuelToken.reportPayouts(conditionId, payouts);

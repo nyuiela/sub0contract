@@ -20,14 +20,14 @@ contract OracleManager is IOracleManager, Initializable {
 
     // modifiers
     modifier onlyOracleManager() {
-        require(
-            permissionManager.hasRole(ORACLE_MANAGER_ROLE, msg.sender), NotAuthorized(msg.sender, ORACLE_MANAGER_ROLE)
-        );
+        if (!permissionManager.hasRole(ORACLE_MANAGER_ROLE, msg.sender)) {
+            revert NotAuthorized(msg.sender, ORACLE_MANAGER_ROLE);
+        }
         _;
     }
 
     modifier onlyRole(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
@@ -35,11 +35,11 @@ contract OracleManager is IOracleManager, Initializable {
         public
         onlyRole(ORACLE)
     {
-        require(allowedOracles[msg.sender], OracleNotFound(msg.sender));
+        if (!allowedOracles[msg.sender]) revert OracleNotFound(msg.sender);
         bytes32 id = keccak256(abi.encodePacked(questionId, gameContract));
-        require(gameContract != address(0), ZeroAddress());
-        require(optionIndex > 0 && optionIndex <= 255, InvalidOptionIndex(optionIndex));
-        require(!fulfilled[id], QuestionAlreadyFulfilled(id));
+        if (gameContract == address(0)) revert ZeroAddress();
+        if (optionIndex == 0 || optionIndex > 255) revert InvalidOptionIndex(optionIndex);
+        if (fulfilled[id]) revert QuestionAlreadyFulfilled(id);
         fulfilled[id] = true;
         result[id] = optionIndex;
         emit OracleFulfilled(questionId, optionIndex, gameContract, amount);
@@ -47,7 +47,7 @@ contract OracleManager is IOracleManager, Initializable {
 
     function overrideResult(bytes32 questionId, address gameContract, uint256 optionIndex) public onlyOracleManager {
         bytes32 id = keccak256(abi.encodePacked(questionId, gameContract));
-        require(fulfilled[id], QuestionNotFulfilled(questionId));
+        if (!fulfilled[id]) revert QuestionNotFulfilled(questionId);
         result[id] = optionIndex;
         emit OracleResultOverridden(questionId, gameContract, optionIndex);
     }
@@ -63,20 +63,20 @@ contract OracleManager is IOracleManager, Initializable {
     }
 
     function initialize(address _permissionManager) public initializer {
-        require(_permissionManager != address(0), ZeroAddress());
+        if (_permissionManager == address(0)) revert ZeroAddress();
         permissionManager = IPermissionManager(_permissionManager);
     }
 
     // functions
     function allow(address oracle) public onlyOracleManager {
-        require(!allowedOracles[oracle], OracleAlreadyExists(oracle));
+        if (allowedOracles[oracle]) revert OracleAlreadyExists(oracle);
         allowedOracles[oracle] = true;
         oracles.push(oracle);
         emit OracleAdded(oracle);
     }
 
     function revoke(address oracle) public onlyOracleManager {
-        require(allowedOracles[oracle], OracleNotFound(oracle));
+        if (!allowedOracles[oracle]) revert OracleNotFound(oracle);
         allowedOracles[oracle] = false;
         for (uint256 i = 0; i < oracles.length; i++) {
             if (oracles[i] == oracle) {

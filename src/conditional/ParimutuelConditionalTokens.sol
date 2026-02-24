@@ -6,7 +6,7 @@ import {CTHelpersV2} from "./CTHelpersV2.sol";
 import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {ReentrancyGuardUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 /**
@@ -18,7 +18,7 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
 contract ParimutuelConditionalTokens is
     Initializable,
     UUPSUpgradeable,
-    ReentrancyGuardUpgradeable,
+    ReentrancyGuard,
     PausableUpgradeable
 {
     bytes32 public constant GAME_CONTRACT_ROLE = keccak256("GAME_CONTRACT_ROLE");
@@ -96,8 +96,6 @@ contract ParimutuelConditionalTokens is
 
     function initialize(IPermissionManager _permissionManager) public initializer {
         if (address(_permissionManager) == address(0)) revert ZeroAddress();
-        __UUPSUpgradeable_init();
-        __ReentrancyGuard_init();
         __Pausable_init();
         permissionManager = _permissionManager;
     }

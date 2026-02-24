@@ -106,7 +106,8 @@ contract Sub0ArbitratorTest is Test {
             tokenManager: address(tokensManager),
             permissionManager: address(permissionManager),
             conditionalToken: address(conditionalTokensV2),
-            predictionVault: address(0)
+            predictionVault: address(0),
+            creForwarder: address(0)
         });
         bytes memory sub0InitData = abi.encodeWithSelector(Sub0.initialize.selector, sub0Config);
         ERC1967Proxy sub0Proxy = new ERC1967Proxy(address(sub0Impl), sub0InitData);

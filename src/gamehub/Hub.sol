@@ -36,21 +36,21 @@ contract Hub is IHub, Initializable {
         public
         initializer
     {
-        require(_permissionManager != address(0), ZeroAddress());
-        require(_tokensManager != address(0), ZeroAddress());
-        require(_oracleManager != address(0), ZeroAddress());
+        if (_permissionManager == address(0)) revert ZeroAddress();
+        if (_tokensManager == address(0)) revert ZeroAddress();
+        if (_oracleManager == address(0)) revert ZeroAddress();
         permissionManager = IPermissionManager(_permissionManager);
         tokensManager = ITokensManager(_tokensManager);
         oracleManager = IOracle(_oracleManager);
     }
 
     modifier onlyRole(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
     function initializeGame(string memory _description, address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(_game != address(0), ZeroAddress());
+        if (_game == address(0)) revert ZeroAddress();
         // require(tokensManager.allowedTokens(_conditionalTokens), InvalidConditionalTokensAddress(_conditionalTokens));
         // game = new Game();
         // game.initialize(_tokensManager, _conditionalTokens, address(this));
@@ -67,7 +67,7 @@ contract Hub is IHub, Initializable {
     }
 
     function activateGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(gameToId[_game] != bytes32(0), InvalidGameId(gameToId[_game]));
+        if (gameToId[_game] == bytes32(0)) revert InvalidGameId(gameToId[_game]);
         // @TODO: Uncomment this when we have a real approval duration
         // require(
         //     block.timestamp > games[gameToId[_game]].createdAt + GAME_APPROVAL_DURATION,
@@ -85,7 +85,7 @@ contract Hub is IHub, Initializable {
     }
 
     function pauseGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(gameShutdownTimestamp[gameToId[_game]] == 0, GameShutdownAlreadyInitiated(gameToId[_game]));
+        if (gameShutdownTimestamp[gameToId[_game]] != 0) revert GameShutdownAlreadyInitiated(gameToId[_game]);
         bytes32 gameId = gameToId[_game];
         gameShutdownTimestamp[gameId] = block.timestamp;
         games[gameId].status = GameStatus.Paused;
@@ -102,7 +102,7 @@ contract Hub is IHub, Initializable {
     }
 
     function unpauseGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(gameShutdownTimestamp[gameToId[_game]] != 0, GameShutdownAlreadyInitiated(gameToId[_game]));
+        if (gameShutdownTimestamp[gameToId[_game]] == 0) revert GameShutdownAlreadyInitiated(gameToId[_game]);
         bytes32 gameId = gameToId[_game];
         _unsetShutdown(gameId);
         games[gameId].status = GameStatus.Active;
@@ -115,7 +115,7 @@ contract Hub is IHub, Initializable {
     }
 
     function banGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(block.timestamp > games[gameToId[_game]].createdAt + BAN_DURATION, BanDurationNotMet(gameToId[_game]));
+        if (block.timestamp <= games[gameToId[_game]].createdAt + BAN_DURATION) revert BanDurationNotMet(gameToId[_game]);
         bytes32 gameId = gameToId[_game];
         games[gameId].status = GameStatus.Banned;
         games[gameId].updatedAt = block.timestamp;
@@ -139,10 +139,9 @@ contract Hub is IHub, Initializable {
     }
 
     function shutdownGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        require(
-            block.timestamp > gameShutdownTimestamp[gameToId[_game]] + GAME_SHUTDOWN_DURATION,
-            GameShutdownDurationNotMet(gameToId[_game])
-        );
+        if (block.timestamp <= gameShutdownTimestamp[gameToId[_game]] + GAME_SHUTDOWN_DURATION) {
+            revert GameShutdownDurationNotMet(gameToId[_game]);
+        }
         bytes32 gameId = gameToId[_game];
         games[gameId].status = GameStatus.Shutdown;
         games[gameId].updatedAt = block.timestamp;
@@ -178,9 +177,9 @@ contract Hub is IHub, Initializable {
     }
 
     function setConfig(Config memory _config) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_config.permissionManager != address(0), ZeroAddress());
-        require(_config.tokensManager != address(0), ZeroAddress());
-        require(_config.oracleManager != address(0), ZeroAddress());
+        if (_config.permissionManager == address(0)) revert ZeroAddress();
+        if (_config.tokensManager == address(0)) revert ZeroAddress();
+        if (_config.oracleManager == address(0)) revert ZeroAddress();
         config = _config;
         permissionManager = IPermissionManager(_config.permissionManager);
         tokensManager = ITokensManager(_config.tokensManager);

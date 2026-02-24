@@ -102,7 +102,7 @@ contract Oracle is Initializable, UUPSUpgradeable {
     }
 
     modifier onlyRole(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 
@@ -115,7 +115,6 @@ contract Oracle is Initializable, UUPSUpgradeable {
         if (initialReporter == address(0)) revert InvalidReporter(initialReporter);
         permissionManager = IPermissionManager(_permissionManager);
         _allowedReporters[initialReporter] = true;
-        __UUPSUpgradeable_init(); // Initialize UUPSUpgradeable
     }
 
     function allowListReporter(address _reporter, bool allowed) external onlyRole(ORACLE_MANAGER_ROLE) {
@@ -168,14 +167,14 @@ contract Oracle is Initializable, UUPSUpgradeable {
         external
         onlyAllowedReporter
     {
-        require(payouts.length > 0 && payouts.length <= 255, InvalidOptionIndex(payouts.length));
+        if (payouts.length == 0 || payouts.length > 255) revert InvalidOptionIndex(payouts.length);
         bytes32 requestId = _activeRequestByBet[questionId];
         if (requestId == bytes32(0)) revert RequestNotFound(questionId);
         BetRequest storage request = _requests[requestId];
 
         request.status = RequestStatus.Fulfilled;
         BetResult storage result = _betResults[questionId];
-        require(result.status != RequestStatus.Fulfilled, ResultAlreadyFulfilled(questionId));
+        if (result.status == RequestStatus.Fulfilled) revert ResultAlreadyFulfilled(requestId);
         result.status = RequestStatus.Fulfilled;
         result.result = payouts;
         result.reporter = msg.sender;

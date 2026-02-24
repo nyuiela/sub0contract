@@ -66,9 +66,8 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
     error PositionNotFound();
 
     function initialize(Config memory _config) external initializer {
-        require(_config.tokenManager != address(0), ZeroAddress());
-        require(_config.permissionManager != address(0), ZeroAddress());
-        __UUPSUpgradeable_init();
+        if (_config.tokenManager == address(0)) revert ZeroAddress();
+        if (_config.permissionManager == address(0)) revert ZeroAddress();
         tokenManager = ITokensManager(_config.tokenManager);
         permissionManager = IPermissionManager(_config.permissionManager);
     }
@@ -78,7 +77,7 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
      * @param _conditionalTokens Address of ConditionalTokensV2 contract
      */
     function setConditionalTokens(address _conditionalTokens) external onlyAuthorized(DEFAULT_ADMIN_ROLE) {
-        require(_conditionalTokens != address(0), ZeroAddress());
+        if (_conditionalTokens == address(0)) revert ZeroAddress();
         conditionalTokens = IConditionalTokensV2(_conditionalTokens);
     }
 
@@ -94,7 +93,7 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
         returns (bytes32)
     {
         require(address(conditionalTokens) != address(0), "Conditional tokens not set");
-        require(outcomeCount >= 2 && outcomeCount <= 256, InvalidOutcomeCount());
+        if (outcomeCount < 2 || outcomeCount > 256) revert InvalidOutcomeCount();
 
         // Create unique key: questionId + game address
         require(questionConditionId[questionId] == bytes32(0), "Condition already prepared");
@@ -353,8 +352,8 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
 
         for (uint256 i = 0; i < outcomeCount;) {
             uint256 indexSet = 1 << i;
-            bytes32 collectionId = CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
-            // Note: positionId calculation kept for potential future use
+            bytes32 _collectionId = CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
+            // Note: positionId calculation kept for potential future use (_collectionId)
             // uint256 positionId = CTHelpersV2.getPositionId(IERC20(token), collectionId);
 
             // Sum all balances for this position ID (across all users)
@@ -379,9 +378,9 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
             AggregatorV3Interface(_priceFeed).latestRoundData();
 
-        require(answer > 0, NegativePrice());
-        require(updatedAt > 0, UpdatedAtIsZero());
-        require(answeredInRound >= roundId, StaleRound());
+        if (answer <= 0) revert NegativePrice();
+        if (updatedAt == 0) revert UpdatedAtIsZero();
+        if (answeredInRound < roundId) revert StaleRound();
 
         uint256 heartbeat = heartbeats[token];
         if (heartbeat == 0) heartbeat = 24 hours;
@@ -395,13 +394,13 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
 
     function convertPrice(address token, uint256 amount) public view returns (uint256) {
         address _priceFeed = tokenManager.getPriceFeed(token);
-        require(_priceFeed != address(0), ZeroAddress());
+        if (_priceFeed == address(0)) revert ZeroAddress();
         return amount * uint256(getChainlinkDataFeedLatestAnswer(token));
     }
 
     function calculateValue(address _tokenIn, uint256 _amountIn) public view returns (uint256) {
         address _priceFeed = tokenManager.getPriceFeed(_tokenIn);
-        require(_priceFeed != address(0), ZeroAddress());
+        if (_priceFeed == address(0)) revert ZeroAddress();
 
         // Get token decimals from tokenManager's public mapping
         // Cast to concrete type to access public mapping
@@ -463,7 +462,7 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
 
     // Modifiers
     modifier onlyAuthorized(bytes32 role) {
-        require(permissionManager.hasRole(role, msg.sender), NotAuthorized(msg.sender, role));
+        if (!permissionManager.hasRole(role, msg.sender)) revert NotAuthorized(msg.sender, role);
         _;
     }
 

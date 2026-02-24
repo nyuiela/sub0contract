@@ -133,7 +133,7 @@ contract ConditionalTokensV2 is ERC1155, Pausable, AccessControl, ReentrancyGuar
     function prepareCondition(address oracle, bytes32 questionId, uint256 outcomeSlotCount) external whenNotPaused {
         if (outcomeSlotCount > 256) revert TooManyOutcomeSlots();
         if (outcomeSlotCount < 2) revert TooFewOutcomeSlots();
-        require(msg.sender == oracle, UnauthorizedOracle());
+        if (msg.sender != oracle) revert UnauthorizedOracle();
 
         bytes32 conditionId = CTHelpersV2.getConditionId(oracle, questionId, outcomeSlotCount);
         Condition storage condition = conditions[conditionId];

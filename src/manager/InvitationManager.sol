@@ -42,11 +42,10 @@ abstract contract InvitationManager {
             invitations[questionId].invitationType == InvitationType.Single
                 || invitations[questionId].invitationType == InvitationType.Group
         ) {
-            require(
-                invitations[questionId].usersInvitationStatus[msg.sender] == InvitationStatus.Accepted
-                    || invitations[questionId].usersInvitationStatus[msg.sender] == InvitationStatus.Pending,
-                UserNotInvited(msg.sender)
-            );
+            if (
+                invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Accepted
+                    && invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Pending
+            ) revert UserNotInvited(msg.sender);
             invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Accepted;
         }
         _;
@@ -67,7 +66,7 @@ abstract contract InvitationManager {
     }
 
     function addUser(bytes32 questionId, address user) external {
-        require(invitations[questionId].owner == msg.sender, OnlyOwnerCanAddUsers(msg.sender)); // this is executed by the game contract.
+        if (invitations[questionId].owner != msg.sender) revert OnlyOwnerCanAddUsers(msg.sender);
         if (invitations[questionId].invitationType == InvitationType.Public) {
             // public game, no need to add users.
         } else if (
@@ -79,11 +78,10 @@ abstract contract InvitationManager {
     }
 
     function addUsers(bytes32 questionId, address[] memory users) external {
-        require(invitations[questionId].owner == msg.sender, OnlyOwnerCanAddUsers(msg.sender)); // this is executed by the game contract.
-        require(
-            invitations[questionId].invitationType == InvitationType.Group,
-            InvalidInvitationType(invitations[questionId].invitationType)
-        );
+        if (invitations[questionId].owner != msg.sender) revert OnlyOwnerCanAddUsers(msg.sender);
+        if (invitations[questionId].invitationType != InvitationType.Group) {
+            revert InvalidInvitationType(invitations[questionId].invitationType);
+        }
         for (uint256 i = 0; i < users.length; i++) {
             invitations[questionId].usersInvitationStatus[users[i]] = InvitationStatus.Pending;
         }
@@ -94,10 +92,9 @@ abstract contract InvitationManager {
             invitations[questionId].invitationType == InvitationType.Group
                 || invitations[questionId].invitationType == InvitationType.Single
         ) {
-            require(
-                invitations[questionId].usersInvitationStatus[msg.sender] == InvitationStatus.Pending,
-                InvitationNotPending(msg.sender)
-            );
+            if (invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Pending) {
+                revert InvitationNotPending(msg.sender);
+            }
             invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Accepted;
         } else if (invitations[questionId].invitationType == InvitationType.Public) {
             invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Accepted;
@@ -105,18 +102,16 @@ abstract contract InvitationManager {
     }
 
     function rejectInvitation(bytes32 questionId) public virtual {
-        require(
-            invitations[questionId].usersInvitationStatus[msg.sender] == InvitationStatus.Pending,
-            InvitationNotPending(msg.sender)
-        );
+        if (invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Pending) {
+            revert InvitationNotPending(msg.sender);
+        }
         invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Rejected;
     }
 
     function acceptInvitation(bytes32 questionId) public virtual {
-        require(
-            invitations[questionId].usersInvitationStatus[msg.sender] == InvitationStatus.Pending,
-            InvitationNotPending(msg.sender)
-        );
+        if (invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Pending) {
+            revert InvitationNotPending(msg.sender);
+        }
         invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Accepted;
     }
 
@@ -125,13 +120,13 @@ abstract contract InvitationManager {
     }
 
     function banUser(bytes32 questionId, address user) external virtual {
-        require(invitations[questionId].owner == msg.sender, OnlyOwnerCanBanUsers(msg.sender));
+        if (invitations[questionId].owner != msg.sender) revert OnlyOwnerCanBanUsers(msg.sender);
         // can only ban user if user bet not taken or started.
         invitations[questionId].usersInvitationStatus[user] = InvitationStatus.Rejected;
     }
 
     function unbanUser(bytes32 questionId, address user) external virtual {
-        require(invitations[questionId].owner == msg.sender, OnlyOwnerCanUnbanUsers(msg.sender));
+        if (invitations[questionId].owner != msg.sender) revert OnlyOwnerCanUnbanUsers(msg.sender);
         invitations[questionId].usersInvitationStatus[user] = InvitationStatus.None;
     }
 }
