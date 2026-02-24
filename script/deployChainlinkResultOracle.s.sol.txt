@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "forge-std/Script.sol";
+import "forge-std/console2.sol";
+import {ChainlinkResultOracle} from "../src/oracle/chainlink/ChainlinkResultOracle.sol";
+import {Oracle} from "../src/oracle/oracle.sol";
+
+/**
+ * @title DeployChainlinkResultOracle
+ * @notice Deployment script for ChainlinkResultOracle contract
+ * @dev Deploys ChainlinkResultOracle and configures it with necessary parameters
+ * 
+ * Environment Variables (required):
+ * - PRIVATE_KEY: Deployer private key
+ * - CHAINLINK_FUNCTIONS_ROUTER: Chainlink Functions Router address
+ * - ORACLE_ADDRESS: Oracle contract address (for fulfilling results)
+ * - CHAINLINK_SUBSCRIPTION_ID: Chainlink Functions subscription ID (uint64)
+ * - CHAINLINK_DON_ID: Chainlink Functions DON ID (bytes32 as hex string, e.g., "0x66756e2d657468657265756d2d7365706f6c69612d312d30")
+ * - CHAINLINK_CALLBACK_GAS_LIMIT: Gas limit for fulfillment callback (uint32)
+ * 
+ * Environment Variables (optional):
+ * - CHAINLINK_SOURCE_CODE_PATH: File path to JavaScript source code for Chainlink Functions (preferred)
+ * - CHAINLINK_SOURCE_CODE: JavaScript source code as string (fallback if path not provided)
+ * - CHAINLINK_RESULT_ORACLE_ADDRESS: Existing ChainlinkResultOracle address (will use if set)
+ */
+
+contract DeployChainlinkResultOracle is Script {
+    function run() external {
+        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerKey);
+
+        console2.log("=== ChainlinkResultOracle Deployment Script ===");
+        console2.log("Deployer:", deployer);
+        console2.log("");
+
+        vm.startBroadcast(deployerKey);
+
+        // Get required environment variables
+        address functionsRouter = vm.envAddress("CHAINLINK_FUNCTIONS_ROUTER");
+        address oracleAddress = vm.envAddress("ORACLE_ADDRESS");
+        uint64 subscriptionId = uint64(vm.envUint("CHAINLINK_SUBSCRIPTION_ID"));
+        bytes32 donId = vm.envBytes32("CHAINLINK_DON_ID");
+        uint32 callbackGasLimit = uint32(vm.envUint("CHAINLINK_CALLBACK_GAS_LIMIT"));
+        
+        // Read source code from file path specified in .env
+        string memory sourceCode = "";
+        if (vm.envExists("CHAINLINK_SOURCE_CODE_PATH")) {
+            string memory sourceCodePath = vm.envString("CHAINLINK_SOURCE_CODE_PATH");
+            sourceCode = vm.readFile(sourceCodePath);
+        } else if (vm.envExists("CHAINLINK_SOURCE_CODE")) {
+            // Fallback to direct string if path not provided
+            sourceCode = vm.envString("CHAINLINK_SOURCE_CODE");
+        }
+
+        console2.log("Configuration:");
+        console2.log("  Functions Router:", functionsRouter);
+        console2.log("  Oracle Address:", oracleAddress);
+        console2.log("  Subscription ID:", subscriptionId);
+        console2.log("  DON ID:", vm.toString(donId));
+        console2.log("  Callback Gas Limit:", callbackGasLimit);
+        if (bytes(sourceCode).length > 0) {
+            console2.log("  Source Code Length:", bytes(sourceCode).length, "bytes");
+        } else {
+            console2.log("  Source Code: Not provided (empty)");
+        }
+        console2.log("");
+
+        // Check if we should use existing contract
+        ChainlinkResultOracle chainlinkOracle;
+        address chainlinkOracleAddress;
+        
+        if (vm.envExists("CHAINLINK_RESULT_ORACLE_ADDRESS")) {
+            chainlinkOracleAddress = vm.envAddress("CHAINLINK_RESULT_ORACLE_ADDRESS");
+            chainlinkOracle = ChainlinkResultOracle(chainlinkOracleAddress);
+            console2.log("Using existing ChainlinkResultOracle at:", chainlinkOracleAddress);
+        } else {
+            console2.log("Deploying ChainlinkResultOracle...");
+            chainlinkOracle = new ChainlinkResultOracle(
+                functionsRouter,
+                deployer,
+                oracleAddress,
+                subscriptionId,
+                donId,
+                callbackGasLimit,
+                sourceCode
+            );
+            chainlinkOracleAddress = address(chainlinkOracle);
+            console2.log("ChainlinkResultOracle deployed at:", chainlinkOracleAddress);
+        }
+
+        // Setup: Allow ChainlinkResultOracle as a reporter in Oracle contract
+        console2.log("");
+        console2.log("=== Setting up Oracle Permissions ===");
+        Oracle oracle = Oracle(oracleAddress);
+        
+        // Check if already allowed
+        bool isAllowed = oracle.isAllowed(chainlinkOracleAddress);
+        if (!isAllowed) {
+            // Try to allowlist the ChainlinkResultOracle as a reporter
+            // This requires ORACLE_MANAGER_ROLE in the Oracle's PermissionManager
+            try oracle.allowListReporter(chainlinkOracleAddress, true) {
+                console2.log("[OK] Allowlisted ChainlinkResultOracle as reporter in Oracle");
+            } catch {
+                console2.log("[WARN] Could not allowlist ChainlinkResultOracle");
+                console2.log("[INFO] Deployer may need ORACLE_MANAGER_ROLE in Oracle's PermissionManager");
+                console2.log("[INFO] Manually call: oracle.allowListReporter(", chainlinkOracleAddress, ", true)");
+            }
+        } else {
+            console2.log("[OK] ChainlinkResultOracle already allowlisted as reporter");
+        }
+
+        console2.log("");
+        console2.log("=== Deployment Summary ===");
+        console2.log("ChainlinkResultOracle:", chainlinkOracleAddress);
+        console2.log("Owner:", deployer);
+        console2.log("Functions Router:", functionsRouter);
+        console2.log("Oracle:", oracleAddress);
+        console2.log("Subscription ID:", subscriptionId);
+        console2.log("DON ID:", vm.toString(donId));
+        console2.log("Callback Gas Limit:", callbackGasLimit);
+        console2.log("Source Code Length:", bytes(sourceCode).length, "bytes");
+        console2.log("Is Reporter Allowed:", oracle.isAllowed(chainlinkOracleAddress));
+        console2.log("==========================");
+
+        vm.stopBroadcast();
+    }
+}
+

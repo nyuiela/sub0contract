@@ -1,0 +1,31 @@
+{
+  "name": "MeVsYou Bet Token",
+  "description": "Conditional token representing a stake on Option 0 in a MeVsYou prediction market. This token entitles the holder to a share of the winnings if this option wins.",
+  "image": "https://silver-voluntary-sawfish-338.mypinata.cloud/ipfs/bafkreidkraz6f5utvaejbgngp77p2mcrh2vmrt7xqbax37mdnxwae3mssm",
+  "external_url": "https://mevsyou.com/markets/0xb6fba499e6921df812b67fbfd37368e9cceb8d27f5e8ac3c63cacc8e8ca9803c",
+  "attributes": [
+    {
+      "trait_type": "Question ID",
+      "value": "0xb6fba499e6921df812b67fbfd37368e9cceb8d27f5e8ac3c63cacc8e8ca9803c"
+    },
+    {
+      "trait_type": "Option Index",
+      "value": "0"
+    },
+    {
+      "trait_type": "Token Type",
+      "value": "Conditional Token"
+    },
+    {
+      "trait_type": "Platform",
+      "value": "MeVsYou"
+    }
+  ],
+  "properties": {
+    "questionId": "0xb6fba499e6921df812b67fbfd37368e9cceb8d27f5e8ac3c63cacc8e8ca9803c",
+    "optionIndex": 0,
+    "collateralToken": "0xbF956eB047146f60BF7025D8988cb2df87a961Fe",
+    "conditionId": "0x...",
+    "collectionId": "0x..."
+  }
+}

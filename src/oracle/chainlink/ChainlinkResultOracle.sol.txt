@@ -1,0 +1,392 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {FunctionsRequest} from
+    "chainlink-brownie-contracts/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
+import {FunctionsClient} from "chainlink-brownie-contracts/contracts/src/v0.8/functions/v1_3_0/FunctionsClient.sol";
+import {Oracle} from "../oracle.sol";
+import {MeVsYou} from "../../gamehub/MeVsYou.sol";
+import {Escrow} from "../../escrow/Escrow.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+/**
+ * @title ChainlinkResultOracle
+ * @notice Chainlink Functions consumer that integrates with Oracle to fetch bet results from external APIs.
+ * @dev This contract extends FunctionsClient to make Chainlink Functions requests and automatically fulfill
+ *      results in the Oracle contract. It handles the request/response cycle for fetching game results.
+ */
+
+contract ChainlinkResultOracle is FunctionsClient, Ownable {
+    using FunctionsRequest for FunctionsRequest.Request;
+    using Strings for address;
+
+    /// @notice Reference to the Oracle contract for fulfilling results.
+    Oracle public resultOracle;
+
+    /// @notice Reference to the Escrow contract to resolve bets.
+    Escrow public escrow;
+
+    /// @notice Chainlink Functions subscription ID.
+    uint64 public subscriptionId;
+
+    /// @notice DON ID for Chainlink Functions.
+    bytes32 public donId;
+
+    /// @notice Gas limit for the fulfillment callback.
+    uint32 public callbackGasLimit;
+
+    /// @notice JavaScript source code for Chainlink Functions execution.
+    string public sourceCode;
+
+    /// @notice Mapping from Chainlink request ID to internal request ID.
+    mapping(bytes32 => bytes32) private _chainlinkRequestToInternalRequest;
+
+    /// @notice Mapping from Chainlink request ID to game and bet IDs.
+    mapping(bytes32 => GameBetInfo) private _requestInfo;
+
+    struct GameBetInfo {
+        address game;
+        bytes32 questionId;
+        address requester;
+    }
+
+    event ChainlinkRequestSent(
+        bytes32 indexed chainlinkRequestId, bytes32 indexed internalRequestId, address game, bytes32 betId
+    );
+    event ChainlinkRequestFulfilled(
+        bytes32 indexed chainlinkRequestId, bytes32 indexed internalRequestId, uint256[] result
+    );
+    event ChainlinkRequestFailed(bytes32 indexed chainlinkRequestId, bytes32 indexed internalRequestId, string reason);
+    event SourceCodeUpdated(string newSourceCode);
+    event SubscriptionIdUpdated(uint64 newSubscriptionId);
+    event DonIdUpdated(bytes32 newDonId);
+    event CallbackGasLimitUpdated(uint32 newCallbackGasLimit);
+
+    error ResultOracleNotSet();
+    error InvalidResultOracle(address oracle);
+    error InvalidSubscriptionId();
+    error InvalidDonId();
+    error InvalidCallbackGasLimit();
+    error RequestNotFound(bytes32 chainlinkRequestId);
+    error OptionNotFound(bytes32 optionKey, address game, uint256 betId);
+
+    /**
+     * @notice Constructor for ChainlinkResultOracle.
+     * @param router Address of the Chainlink Functions Router.
+     * @param initialOwner Owner of the contract.
+     * @param _resultOracle Address of the Oracle contract.
+     * @param _subscriptionId Chainlink Functions subscription ID.
+     * @param _donId DON ID for Chainlink Functions.
+     * @param _callbackGasLimit Gas limit for fulfillment callback.
+     * @param _sourceCode JavaScript source code for Chainlink Functions.
+     */
+    constructor(
+        address router,
+        address initialOwner,
+        address _resultOracle,
+        uint64 _subscriptionId,
+        bytes32 _donId,
+        uint32 _callbackGasLimit,
+        string memory _sourceCode
+    ) FunctionsClient(router) Ownable(initialOwner) {
+        if (router == address(0)) revert InvalidResultOracle(router);
+        if (_resultOracle == address(0)) revert InvalidResultOracle(_resultOracle);
+        if (_subscriptionId == 0) revert InvalidSubscriptionId();
+        if (_donId == bytes32(0)) revert InvalidDonId();
+        if (_callbackGasLimit == 0) revert InvalidCallbackGasLimit();
+
+        resultOracle = Oracle(_resultOracle);
+        subscriptionId = _subscriptionId;
+        donId = _donId;
+        callbackGasLimit = _callbackGasLimit;
+        sourceCode = _sourceCode;
+    }
+
+    /**
+     * @notice Requests a bet result using Chainlink Functions.
+     * @param _game Identifier of the game.
+     * @param questionId Identifier of the question.
+     * @param params Additional parameters to pass to the API (e.g., API endpoint hints).
+     * @return chainlinkRequestId The Chainlink Functions request ID.
+     */
+    function requestResultWithChainlink(address _game, bytes32 questionId, bytes calldata params)
+        external
+        returns (bytes32 chainlinkRequestId)
+    {
+        if (address(resultOracle) == address(0)) revert ResultOracleNotSet();
+
+        // First, create a request in the Oracle to track it
+        bytes32 internalRequestId = resultOracle.requestResult(_game, questionId, params);
+
+        // Prepare the Chainlink Functions request
+        FunctionsRequest.Request memory req;
+        req.initializeRequestForInlineJavaScript(sourceCode);
+
+        // Set args: gameId, betId, optionCount, and option strings
+        // args[0] = gameId, args[1] = questionId
+        string[] memory args = new string[](1);
+        // args[0] = addressToString(_game);
+        // args[1] = _uint256ToString(questionId);
+        // args[0] = _game.toHexString();
+        args[0] = Strings.toHexString(uint256(questionId));
+
+        req.setArgs(args);
+
+        // Encode the request
+        bytes memory encodedRequest = req.encodeCBOR();
+
+        // Send the Chainlink Functions request
+        chainlinkRequestId = _sendRequest(encodedRequest, subscriptionId, callbackGasLimit, donId);
+
+        // Store the mapping
+        _chainlinkRequestToInternalRequest[chainlinkRequestId] = internalRequestId;
+        _requestInfo[chainlinkRequestId] = GameBetInfo({game: _game, questionId: questionId, requester: msg.sender});
+
+        emit ChainlinkRequestSent(chainlinkRequestId, internalRequestId, _game, questionId);
+    }
+
+    /**
+     * @notice Callback function called by Chainlink Functions when the request is fulfilled.
+     * @param requestId The Chainlink Functions request ID.
+     * @param response The response from the Chainlink Functions execution.
+     * @param err Error bytes if the request failed.
+     */
+    function _fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err) internal override {
+        bytes32 internalRequestId = _chainlinkRequestToInternalRequest[requestId];
+        if (internalRequestId == bytes32(0)) {
+            revert RequestNotFound(requestId);
+        }
+
+        if (err.length > 0) {
+            // Request failed, mark as failed in Oracle
+            string memory reason = string(err);
+            resultOracle.failRequest(internalRequestId, reason);
+            emit ChainlinkRequestFailed(requestId, internalRequestId, reason);
+        } else {
+            // Parse the response to get the option index (uint256)
+            // uint256 resultIndex = _parseResultIndex(response);
+            uint256[] memory result = abi.decode(response, (uint256[]));
+
+            // Validate that the index is within bounds
+            GameBetInfo memory info = _requestInfo[requestId];
+            // _validateOptionIndex(resultIndex, info.game, info.betId);
+
+            // Fulfill the result in Oracle
+            resultOracle.requestResult(info.game, info.questionId, response);
+            resultOracle.fulfillResult(info.questionId, result, response);
+
+            // Get the option key for the event
+            // bytes32[] memory optionKeys = game.bets[info.betId].;
+            // bytes32 resultOption = optionKeys[resultIndex];
+            emit ChainlinkRequestFulfilled(requestId, internalRequestId, result);
+        }
+
+        // Clean up mappings
+        delete _chainlinkRequestToInternalRequest[requestId];
+        delete _requestInfo[requestId];
+    }
+
+    /**
+     * @notice Parses the option index (uint256) from the Chainlink Functions response.
+     * @param response The response bytes from Chainlink Functions.
+     * @dev The response is expected to be a uint256 encoded using Functions.encodeUint256().
+     * @return resultIndex The parsed option index.
+     */
+    function _parseResultIndex(bytes memory response) internal pure returns (uint256 resultIndex) {
+        if (response.length == 0) {
+            revert("Empty response from Chainlink Functions");
+        }
+        // Decode the uint256 directly from the response
+        resultIndex = abi.decode(response, (uint256));
+    }
+
+    /**
+     * @notice Converts a hex string to bytes32.
+     * @param hexString Hex string (with or without 0x prefix, e.g., "0x097cdcb4..." or "097cdcb4...").
+     * @return bytes32 value.
+     */
+    // function _hexStringToBytes32(string memory hexString) internal pure returns (bytes32) {
+    //     bytes memory hexBytes = bytes(hexString);
+    //     uint256 length = hexBytes.length;
+
+    //     // Find start (skip leading whitespace and 0x prefix)
+    //     uint256 start = 0;
+    //     while (
+    //         start < length
+    //             && (
+    //                 hexBytes[start] == bytes1(uint8(0x20)) || hexBytes[start] == bytes1(uint8(0x09))
+    //                     || hexBytes[start] == bytes1(uint8(0x0A)) || hexBytes[start] == bytes1(uint8(0x0D))
+    //             )
+    //     ) {
+    //         start++;
+    //     }
+
+    //     // Skip 0x prefix if present
+    //     bool hasPrefix = false;
+    //     if (
+    //         start + 2 <= length && hexBytes[start] == bytes1(uint8(0x30))
+    //             && (hexBytes[start + 1] == bytes1(uint8(0x78)) || hexBytes[start + 1] == bytes1(uint8(0x58)))
+    //     ) {
+    //         start += 2;
+    //         hasPrefix = true;
+    //     }
+
+    //     // Find end (skip trailing whitespace and newlines)
+    //     uint256 end = length;
+    //     while (end > start) {
+    //         bytes1 lastChar = hexBytes[end - 1];
+    //         if (
+    //             lastChar == bytes1(uint8(0x20)) || lastChar == bytes1(uint8(0x09)) || lastChar == bytes1(uint8(0x0A))
+    //                 || lastChar == bytes1(uint8(0x0D)) || lastChar == bytes1(0)
+    //         ) {
+    //             end--;
+    //         } else {
+    //             break;
+    //         }
+    //     }
+
+    //     uint256 hexLength = end - start;
+
+    //     // Accept 64 hex chars (without 0x) or 66 chars (with 0x)
+    //     if (!hasPrefix && hexLength == 66) {
+    //         // No prefix was detected but we have 66 chars, might be 0x + 64 hex
+    //         // Check if first two chars are "0x"
+    //         if (
+    //             start + 2 <= length && hexBytes[start] == bytes1(uint8(0x30))
+    //                 && (hexBytes[start + 1] == bytes1(uint8(0x78)) || hexBytes[start + 1] == bytes1(uint8(0x58)))
+    //         ) {
+    //             start += 2;
+    //             hexLength = 64;
+    //         }
+    //     }
+
+    //     require(hexLength == 64, "Invalid hex string length for bytes32: expected 64 hex characters after trimming");
+
+    //     bytes32 result;
+    //     for (uint256 i = 0; i < 32; i++) {
+    //         uint8 byteValue = _hexCharToByte(hexBytes[start + i * 2]) * 16 + _hexCharToByte(hexBytes[start + i * 2 + 1]);
+    //         result = bytes32(uint256(result) | (uint256(byteValue) << (248 - i * 8)));
+    //     }
+    //     return result;
+    // }
+
+    /**
+     * @notice Converts a hex character to its byte value.
+     * @param c Hex character.
+     * @return Byte value (0-15).
+     */
+    // function _hexCharToByte(bytes1 c) internal pure returns (uint8) {
+    //     uint8 char = uint8(c);
+    //     if (char >= uint8(bytes1("0")) && char <= uint8(bytes1("9"))) {
+    //         return char - uint8(bytes1("0"));
+    //     } else if (char >= uint8(bytes1("a")) && char <= uint8(bytes1("f"))) {
+    //         return char - uint8(bytes1("a")) + 10;
+    //     } else if (char >= uint8(bytes1("A")) && char <= uint8(bytes1("F"))) {
+    //         return char - uint8(bytes1("A")) + 10;
+    //     }
+    //     revert("Invalid hex character");
+    // }
+
+    /**
+     * @notice Validates that the option index is within bounds for the bet's options.
+     * @param optionIndex The option index to validate.
+     * @param game The game address.
+     * @param betId The bet ID.
+     */
+    function _validateOptionIndex(uint256 optionIndex, address game, bytes32 betId) internal view {
+        // Get all option keys for this bet
+        // bytes32[] memory optionKeys = game.getBetOptionKeys(betId);
+
+        // Check if the index is within bounds
+        // if (optionIndex >= optionKeys.length) {
+        //     revert OptionNotFound(bytes32(0), gameId, betId);
+        // }
+    }
+
+    /**
+     * @notice Updates the JavaScript source code for Chainlink Functions.
+     * @param newSourceCode The new source code.
+     */
+    function updateSourceCode(string memory newSourceCode) external onlyOwner {
+        sourceCode = newSourceCode;
+        emit SourceCodeUpdated(newSourceCode);
+    }
+
+    /**
+     * @notice Updates the subscription ID.
+     * @param newSubscriptionId The new subscription ID.
+     */
+    function updateSubscriptionId(uint64 newSubscriptionId) external onlyOwner {
+        if (newSubscriptionId == 0) revert InvalidSubscriptionId();
+        subscriptionId = newSubscriptionId;
+        emit SubscriptionIdUpdated(newSubscriptionId);
+    }
+
+    /**
+     * @notice Updates the DON ID.
+     * @param newDonId The new DON ID.
+     */
+    function updateDonId(bytes32 newDonId) external onlyOwner {
+        if (newDonId == bytes32(0)) revert InvalidDonId();
+        donId = newDonId;
+        emit DonIdUpdated(newDonId);
+    }
+
+    /**
+     * @notice Updates the callback gas limit.
+     * @param newCallbackGasLimit The new callback gas limit.
+     */
+    function updateCallbackGasLimit(uint32 newCallbackGasLimit) external onlyOwner {
+        if (newCallbackGasLimit == 0) revert InvalidCallbackGasLimit();
+        callbackGasLimit = newCallbackGasLimit;
+        emit CallbackGasLimitUpdated(newCallbackGasLimit);
+    }
+
+    /**
+     * @notice Updates the Oracle contract address.
+     * @param newResultOracle The new Oracle address.
+     */
+    function updateResultOracle(address newResultOracle) external onlyOwner {
+        if (newResultOracle == address(0)) revert InvalidResultOracle(newResultOracle);
+        resultOracle = Oracle(newResultOracle);
+    }
+
+    /**
+     * @notice Gets the internal request ID for a Chainlink request ID.
+     * @param chainlinkRequestId The Chainlink Functions request ID.
+     * @return The internal request ID.
+     */
+    function getInternalRequestId(bytes32 chainlinkRequestId) external view returns (bytes32) {
+        return _chainlinkRequestToInternalRequest[chainlinkRequestId];
+    }
+
+    /**
+     * @notice Gets the game and bet info for a Chainlink request ID.
+     * @param chainlinkRequestId The Chainlink Functions request ID.
+     * @return The game and bet information.
+     */
+    function getRequestInfo(bytes32 chainlinkRequestId) external view returns (GameBetInfo memory) {
+        return _requestInfo[chainlinkRequestId];
+    }
+
+    // Helper functions
+
+    // function _uint256ToString(uint256 value) internal pure returns (string memory) {
+    //     if (value == 0) {
+    //         return "0";
+    //     }
+    //     uint256 temp = value;
+    //     uint256 digits;
+    //     while (temp != 0) {
+    //         digits++;
+    //         temp /= 10;
+    //     }
+    //     bytes memory buffer = new bytes(digits);
+    //     while (value != 0) {
+    //         digits -= 1;
+    //         buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+    //         value /= 10;
+    //     }
+    //     return string(buffer);
+    // }
+}

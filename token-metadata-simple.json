@@ -1,0 +1,11 @@
+{
+  "name": "MeVsYou Bet Token",
+  "description": "A conditional token from the MeVsYou prediction market platform",
+  "image": "https://api.mevsyou.com/images/token.png",
+  "attributes": [
+    {
+      "trait_type": "Option",
+      "value": "0"
+    }
+  ]
+}

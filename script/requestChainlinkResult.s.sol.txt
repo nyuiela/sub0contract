@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Script} from "forge-std/Script.sol";
+import {console2} from "forge-std/console2.sol";
+import {ChainlinkResultOracle} from "../src/oracle/chainlink/ChainlinkResultOracle.sol";
+import {Oracle} from "../src/oracle/oracle.sol";
+
+/**
+ * @title RequestChainlinkResult
+ * @notice Script to request a bet result using Chainlink Functions via ChainlinkResultOracle
+ * @dev Calls requestResultWithChainlink to trigger Chainlink Functions request for bet resolution
+ * 
+ * Required Environment Variables:
+ * - PRIVATE_KEY: Caller private key
+ * - CHAINLINK_RESULT_ORACLE_ADDRESS: ChainlinkResultOracle contract address
+ * - GAME_ADDRESS: MeVsYou game contract address
+ * - QUESTION_ID: Bet question ID (bytes32 as hex string, e.g., "0x...")
+ * 
+ * Optional Environment Variables:
+ * - PARAMS: Additional parameters as hex string (default: empty bytes)
+ */
+contract RequestChainlinkResult is Script {
+    function run() external {
+        uint256 callerKey = vm.envUint("PRIVATE_KEY");
+        address caller = vm.addr(callerKey);
+
+        // Get required environment variables
+        address chainlinkOracleAddr = vm.envAddress("CHAINLINK_RESULT_ORACLE_ADDRESS");
+        address gameAddress = vm.envAddress("GAME_ADDRESS");
+        bytes32 questionId = vm.envBytes32("QUESTION_ID");
+        
+        // Get optional params (default to empty bytes)
+        bytes memory params = "";
+        if (vm.envExists("PARAMS")) {
+            params = vm.envBytes("PARAMS");
+        }
+
+        console2.log("=== Request Chainlink Result ===");
+        console2.log("Caller:", caller);
+        console2.log("ChainlinkResultOracle:", chainlinkOracleAddr);
+        console2.log("Game Address:", gameAddress);
+        console2.log("Question ID:", vm.toString(questionId));
+        console2.log("Params Length:", params.length, "bytes");
+        console2.log("");
+
+        // Initialize contract instance
+        ChainlinkResultOracle chainlinkOracle = ChainlinkResultOracle(chainlinkOracleAddr);
+
+        vm.startBroadcast(callerKey);
+
+        // Request result via Chainlink Functions
+        console2.log("Requesting result via Chainlink Functions...");
+        try chainlinkOracle.requestResultWithChainlink(gameAddress, questionId, params) returns (bytes32 chainlinkRequestId) {
+            console2.log("[OK] Chainlink request sent successfully");
+            console2.log("Chainlink Request ID:", vm.toString(chainlinkRequestId));
+            
+            // Get internal request ID
+            try chainlinkOracle.getInternalRequestId(chainlinkRequestId) returns (bytes32 internalRequestId) {
+                console2.log("Internal Request ID:", vm.toString(internalRequestId));
+            } catch {
+                console2.log("[WARN] Could not retrieve internal request ID");
+            }
+            
+            // Get request info
+            try chainlinkOracle.getRequestInfo(chainlinkRequestId) returns (
+                ChainlinkResultOracle.GameBetInfo memory info
+            ) {
+                console2.log("Request Info:");
+                console2.log("  Game:", info.game);
+                console2.log("  Question ID:", vm.toString(info.questionId));
+                console2.log("  Requester:", info.requester);
+            } catch {
+                console2.log("[WARN] Could not retrieve request info");
+            }
+        } catch Error(string memory reason) {
+            console2.log("[ERROR] Request failed:", reason);
+            revert(reason);
+        } catch (bytes memory lowLevelData) {
+            console2.log("[ERROR] Request failed with low-level error");
+            console2.log("Error data:", vm.toString(lowLevelData));
+            revert("Request failed");
+        }
+
+        vm.stopBroadcast();
+
+        console2.log("");
+        console2.log("=== Request Complete ===");
+        console2.log("Monitor Chainlink Functions dashboard for request status");
+        console2.log("The result will be automatically fulfilled when Chainlink Functions completes");
+    }
+}
