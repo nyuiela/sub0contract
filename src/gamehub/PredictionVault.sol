@@ -9,6 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
+// import {ReceivableTemplate} from "../templates/ReceivableTemplate.sol";
 
 /**
  * @title PredictionVault
@@ -43,6 +44,7 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
     ) EIP712("Sub0PredictionVault", "1") Ownable(msg.sender) {
         usdc = IERC20(_usdc);
         ctf = IConditionalTokensV2(_ctf);
+        // __ReceivableTemplate_init(msg.sender, );
         backendSigner = _backendSigner;
         donSigner = _backendSigner;
     }

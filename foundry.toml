@@ -7,6 +7,7 @@ viaIR = true
 optimizer = true
 # Lower runs = smaller bytecode (stays under 24kb limit); increase for production if needed
 optimizer_runs = 200
+extra_output = ["metadata"]
 
 
 # File system permissions for scripts

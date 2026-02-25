@@ -9,7 +9,7 @@ etherscan_url := "https://api.etherscan.io/v2/api?chainid=11155111"
 
 deploy network="sepolia":
   @echo "Deploying Sub0 stack to {{network}}..."
-  forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
+  infisical run --path="/sub0contract" -- forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} --broadcast
 
 # Install lib dependencies (submodules). Run after clone.
@@ -103,6 +103,6 @@ upgrade-sub0 network="sepolia":
 
 set-cre-forwarder-config network="sepolia":
   @echo "Setting CRE forwarder config on Sub0 (forwarder, author, workflow name, workflow ID)..."
-  forge script script/setCreForwarderConfig.s.sol:SetCreForwarderConfig -vvvv \
+  infisical run --path="/sub0contract" -- forge script script/setCreForwarderConfig.s.sol:SetCreForwarderConfig -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
