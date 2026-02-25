@@ -4,12 +4,13 @@ pragma solidity ^0.8.0;
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IReceiver} from "./IReceiver.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /// @title ReceiverTemplate - Abstract receiver with optional permission controls
 /// @notice Provides flexible, updatable security checks for receiving workflow reports
 /// @dev The forwarder address is required at construction time for security.
 ///      Additional permission fields can be configured using setter functions.
-abstract contract ReceiverTemplate is IReceiver, OwnableUpgradeable {
+abstract contract ReceiverTemplate is Initializable, IReceiver, OwnableUpgradeable {
   // Required permission field at deployment, configurable after
   address private s_forwarderAddress; // If set, only this address can call onReport
 
@@ -18,10 +19,14 @@ abstract contract ReceiverTemplate is IReceiver, OwnableUpgradeable {
   bytes10 private s_expectedWorkflowName; // Only validated when s_expectedAuthor is also set
   bytes32 private s_expectedWorkflowId; // If set, only reports from this specific workflow ID are accepted
 
-  function __ReceiverTemplate_init(address _owner, address _forwarderAddress) internal initializer {
-    __Ownable_init(_owner);
-    s_forwarderAddress = _forwarderAddress;
-  }
+/// @dev Replaces the constructor for UUPS Proxy compatibility
+    function __ReceiverTemplate_init(address _forwarderAddress) internal onlyInitializing {
+        if (_forwarderAddress == address(0)) {
+            revert InvalidForwarderAddress();
+        }
+        s_forwarderAddress = _forwarderAddress;
+        emit ForwarderAddressUpdated(address(0), _forwarderAddress);
+    }
 
 // function initialize(address _owner, address _forwarderAddress) external initializer {
 //   __Ownable_init(_owner);
