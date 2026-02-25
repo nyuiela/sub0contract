@@ -140,32 +140,6 @@ contract Sub0ResolutionTest is Test {
         vault.setFeeConfig(address(this), 500);
     }
 
-    /**
-     * @notice Helper function to add users to invitation and have them accept
-     * @param questionId The question ID
-     * @param betOwner The owner of the bet (who created it)
-     * @param users Array of users to invite
-     */
-    function _inviteAndAcceptUsers(bytes32 questionId, address betOwner, address[] memory users) internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            // Owner adds user to invitation
-            vm.prank(betOwner);
-            sub0.addUser(questionId, users[i]);
-
-            // User accepts invitation
-            vm.prank(users[i]);
-            sub0.acceptInvitation(questionId);
-        }
-    }
-
-    /**
-     * @notice Helper function for single user invitation
-     */
-    function _inviteAndAcceptUser(bytes32 questionId, address betOwner, address _user) internal {
-        address[] memory users = new address[](1);
-        users[0] = _user;
-        _inviteAndAcceptUsers(questionId, betOwner, users);
-    }
 
     function _market(
         string memory question,
@@ -206,7 +180,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -237,7 +210,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -269,7 +241,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -301,7 +272,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -402,7 +372,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -439,7 +408,6 @@ contract Sub0ResolutionTest is Test {
         address[] memory users = new address[](2);
         users[0] = user;
         users[1] = user2;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -492,7 +460,6 @@ contract Sub0ResolutionTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 

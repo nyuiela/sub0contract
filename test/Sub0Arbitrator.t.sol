@@ -138,33 +138,6 @@ contract Sub0ArbitratorTest is Test {
         vault.setFeeConfig(address(this), 500);
     }
 
-    /**
-     * @notice Helper function to add users to invitation and have them accept
-     * @param questionId The question ID
-     * @param betOwner The owner of the bet (who created it)
-     * @param users Array of users to invite
-     */
-    function _inviteAndAcceptUsers(bytes32 questionId, address betOwner, address[] memory users) internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            // Owner adds user to invitation
-            vm.prank(betOwner);
-            sub0.addUser(questionId, users[i]);
-
-            // User accepts invitation
-            vm.prank(users[i]);
-            sub0.acceptInvitation(questionId);
-        }
-    }
-
-    /**
-     * @notice Helper function for single user invitation
-     */
-    function _inviteAndAcceptUser(bytes32 questionId, address betOwner, address user) internal {
-        address[] memory users = new address[](1);
-        users[0] = user;
-        _inviteAndAcceptUsers(questionId, betOwner, users);
-    }
-
     function _market(
         string memory question,
         address _oracle,
@@ -250,7 +223,6 @@ contract Sub0ArbitratorTest is Test {
         users[0] = user1;
         users[1] = user2;
         users[2] = user3;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -300,9 +272,6 @@ contract Sub0ArbitratorTest is Test {
                 InvitationManager.InvitationType.Single
             )
         );
-
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -396,8 +365,6 @@ contract Sub0ArbitratorTest is Test {
             )
         );
 
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -433,8 +400,6 @@ contract Sub0ArbitratorTest is Test {
             )
         );
 
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -476,7 +441,6 @@ contract Sub0ArbitratorTest is Test {
         users[0] = user1;
         users[1] = user2;
         users[2] = user3;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 

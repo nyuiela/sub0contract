@@ -169,32 +169,6 @@ contract Sub0StakingTest is Test {
         sub0.stake(questionId, bytes32(0), partition, token, amount);
     }
 
-    /**
-     * @notice Helper function to add users to invitation and have them accept
-     * @param questionId The question ID
-     * @param betOwner The owner of the bet (who created it)
-     * @param users Array of users to invite
-     */
-    function _inviteAndAcceptUsers(bytes32 questionId, address betOwner, address[] memory users) internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            // Owner adds user to invitation
-            vm.prank(betOwner);
-            sub0.addUser(questionId, users[i]);
-
-            // User accepts invitation
-            vm.prank(users[i]);
-            sub0.acceptInvitation(questionId);
-        }
-    }
-
-    /**
-     * @notice Helper function for single user invitation
-     */
-    function _inviteAndAcceptUser(bytes32 questionId, address betOwner, address _user) internal {
-        address[] memory users = new address[](1);
-        users[0] = _user;
-        _inviteAndAcceptUsers(questionId, betOwner, users);
-    }
 
     function testStakeAndReceiveConditionalTokens() public {
         bytes32 questionId = sub0.create(
@@ -202,8 +176,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -228,8 +200,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -266,7 +236,6 @@ contract Sub0StakingTest is Test {
         address[] memory users = new address[](2);
         users[0] = user;
         users[1] = user2;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -302,7 +271,7 @@ contract Sub0StakingTest is Test {
 
     function testStakeWithInvalidQuestionId() public {
         // whenInvited(0) runs first and reverts with UserNotInvited (no market for bytes32(0))
-        vm.expectRevert(abi.encodeWithSelector(InvitationManager.UserNotInvited.selector, address(this)));
+        vm.expectRevert(abi.encodeWithSelector(Sub0.InvalidQuestionId.selector, bytes32(0)));
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
         partition[1] = 2;
@@ -315,7 +284,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
@@ -333,7 +301,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
@@ -352,7 +319,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -376,7 +342,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -401,7 +366,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -428,7 +392,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -455,9 +418,7 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 3, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
-
+  
         uint256 stakeAmount = 1000 * 10 ** 18;
 
         collateralToken.mint(user, stakeAmount * 3);
@@ -486,7 +447,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -515,8 +475,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 5, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -551,8 +509,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
-
         uint256 stakeAmount = 1000 * 10 ** 18;
 
         collateralToken.mint(user, stakeAmount * 10);
@@ -581,8 +537,6 @@ contract Sub0StakingTest is Test {
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
-
         uint256 stakeAmount = 1000 * 10 ** 18;
 
         collateralToken.mint(user, stakeAmount);
@@ -604,7 +558,6 @@ contract Sub0StakingTest is Test {
                 "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 

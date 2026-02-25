@@ -7,18 +7,28 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
-// import {ReceivableTemplate} from "../templates/ReceivableTemplate.sol";
+import {ReceiverTemplate} from "./ReceiverTemplate.sol";
 
 /**
  * @title PredictionVault
  * @notice Dual-signature relayer model: DON (CRE) signs LMSR quote; user signs intent (maxCostUsdc).
  *         Relayer submits both signatures; USDC is pulled from user, CTF sent to user (gasless for user).
  *         Holds ConditionalTokensV2 outcome tokens and USDC; executes inventory swaps.
+ *         Implements IReceiver for CRE: only the configured forwarder can call onReport; report prefix routes to executeTrade or seedMarketLiquidity.
  */
-contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, ERC1155Holder {
+contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, ReentrancyGuard, ERC1155Holder {
     using ECDSA for bytes32;
+
+    uint8 private constant CRE_ACTION_EXECUTE_TRADE = 0x00;
+    uint8 private constant CRE_ACTION_SEED_LIQUIDITY = 0x01;
+
+    error CREInvalidSender(address sender, address expected);
+    error CREReportTooShort();
+    error CREUnknownAction(uint8 prefix);
+    error CRESeedLiquidityNotOwner();
 
     bytes32 public constant DON_QUOTE_TYPEHASH = keccak256(
         "DONQuote(bytes32 marketId,uint256 outcomeIndex,bool buy,uint256 quantity,uint256 tradeCostUsdc,address user,uint256 nonce,uint256 deadline)"
@@ -40,14 +50,16 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
     constructor(
         address _usdc,
         address _ctf,
-        address _backendSigner
-    ) EIP712("Sub0PredictionVault", "1") Ownable(msg.sender) {
+        address _backendSigner,
+        address _creForwarder
+    ) EIP712("Sub0PredictionVault", "1") ReceiverTemplate(msg.sender, _creForwarder)
+     {
         usdc = IERC20(_usdc);
         ctf = IConditionalTokensV2(_ctf);
-        // __ReceivableTemplate_init(msg.sender, );
         backendSigner = _backendSigner;
         donSigner = _backendSigner;
     }
+
 
     function setBackendSigner(address _backendSigner) external onlyOwner {
         address old = backendSigner;
@@ -74,8 +86,14 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
 
     /**
      * @dev Seed initial liquidity: platform sends USDC to vault; vault splits into full outcome set (CTF).
+     *      Uses msg.sender for onlyOwner and transferFrom (so CRE forwarder must be owner and approve USDC).
      */
     function seedMarketLiquidity(bytes32 questionId, uint256 amountUsdc) external override onlyOwner nonReentrant {
+        _seedMarketLiquidityInternal(questionId, amountUsdc);
+    }
+
+    function _seedMarketLiquidityInternal(bytes32 questionId, uint256 amountUsdc) internal nonReentrant {
+        if (owner() != msg.sender) revert CRESeedLiquidityNotOwner();
         bytes32 conditionId = _questionConditionId[questionId];
         if (conditionId == bytes32(0)) revert MarketNotRegistered();
 
@@ -160,7 +178,7 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
     }
 
     /**
-     * @dev Execute trade (dual-signature): DON quote + user intent. Relayer pays gas; USDC pulled from user, CTF sent to user.
+     * @dev Execute trade using dual-signature: DON quote + user intent. Relayer pays gas; USDC pulled from user, CTF sent to user.
      *      BUY: tradeCostUsdc <= maxCostUsdc; USDC from user to vault; CTF from vault to user.
      *      SELL: tradeCostUsdc >= maxCostUsdc (min receive); CTF from user to vault; USDC from vault to user.
      */
@@ -216,7 +234,47 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
         emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
     }
 
-    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC1155Holder) returns (bool) {
-        return ERC1155Holder.supportsInterface(interfaceId);
+    /// @dev Routes CRE reports by prefix. Backend sends: prefix (1 byte) + abi.encode(...payload).
+    ///      - 0x00: executeTrade → payload = abi.encode(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, maxCostUsdc, nonce, deadline, user, donSignature, userSignature)
+    ///      - 0x01: seedMarketLiquidity → payload = abi.encode(questionId, amountUsdc). Caller (forwarder) must be owner and must approve USDC.
+    function _processReport(bytes calldata report) internal override {
+        if (report.length == 0) revert CREReportTooShort();
+        uint8 action = uint8(report[0]);
+        bytes calldata payload = report[1:];
+
+        if (action == CRE_ACTION_EXECUTE_TRADE) {
+            (
+                bytes32 questionId,
+                uint256 outcomeIndex,
+                bool buy,
+                uint256 quantity,
+                uint256 tradeCostUsdc,
+                uint256 maxCostUsdc,
+                uint256 nonce,
+                uint256 deadline,
+                address user,
+                bytes memory donSignature,
+                bytes memory userSignature
+            ) = abi.decode(payload, (bytes32, uint256, bool, uint256, uint256, uint256, uint256, uint256, address, bytes, bytes));
+            this.executeTrade(
+                questionId, outcomeIndex, buy, quantity, tradeCostUsdc, maxCostUsdc,
+                nonce, deadline, user, donSignature, userSignature
+            );
+            return;
+        }
+        if (action == CRE_ACTION_SEED_LIQUIDITY) {
+            (bytes32 questionId, uint256 amountUsdc) = abi.decode(payload, (bytes32, uint256));
+            _seedMarketLiquidityInternal(questionId, amountUsdc);
+            return;
+        }
+        revert CREUnknownAction(action);
     }
+
+    function supportsInterface(bytes4 interfaceId) public pure virtual override(ERC1155Holder, ReceiverTemplate) returns (bool) {
+        return interfaceId == type(ReceiverTemplate).interfaceId
+            || interfaceId == type(ERC1155Holder).interfaceId
+            || interfaceId == type(IERC165).interfaceId;
+    }
+
+
 }

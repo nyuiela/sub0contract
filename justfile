@@ -97,7 +97,7 @@ allowlist-reporter network="sepolia":
 
 upgrade-sub0 network="sepolia":
   @echo "Upgrading Sub0 on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/upgradeSub0.s.sol:UpgradeSub0 -vvvv \
+  forge script script/upgradeSub0.s.sol:UpgradeSub0 -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
 
