@@ -107,7 +107,8 @@ contract Sub0ResolutionTest is Test {
             tokenManager: address(tokensManager),
             permissionManager: address(permissionManager),
             conditionalToken: address(conditionalTokensV2),
-            predictionVault: address(0)
+            predictionVault: address(0),
+            creForwarder: address(0)
         });
         bytes memory sub0InitData = abi.encodeWithSelector(Sub0.initialize.selector, sub0Config);
         ERC1967Proxy sub0Proxy = new ERC1967Proxy(address(sub0Impl), sub0InitData);
@@ -389,7 +390,8 @@ contract Sub0ResolutionTest is Test {
         bytes32 chainlinkRequestId2 =
             mockChainlinkResultOracle.requestResultWithChainlink(address(sub0), questionId, "");
 
-        vm.expectRevert(abi.encodeWithSelector(Oracle.ResultAlreadyFulfilled.selector, questionId));
+        bytes32 activeRequestId = oracleManager.getActiveRequestId(questionId);
+        vm.expectRevert(abi.encodeWithSelector(Oracle.ResultAlreadyFulfilled.selector, activeRequestId));
         mockChainlinkResultOracle.fulfillRequest(chainlinkRequestId2, payouts);
     }
 

@@ -13,8 +13,7 @@ docs/
 # Dotenv file
 .env
 
-#lib
-lib/
+
 
 # Binaries
 bin/

@@ -1,0 +1,34 @@
+{
+  "transactions": [
+    {
+      "hash": null,
+      "transactionType": "CALL",
+      "contractName": null,
+      "contractAddress": "0xae186e6ae3082edd8ed44dfe1e26614d82b48747",
+      "function": "requestResultWithChainlink(address,bytes32,bytes)",
+      "arguments": [
+        "0x4c6d2B645d5d62D79e2396b4c3564CcD83c338d5",
+        "0xb6fba499e6921df812b67fbfd37368e9cceb8d27f5e8ac3c63cacc8e8ca9803c",
+        "0x"
+      ],
+      "transaction": {
+        "from": "0xf0830060f836b8d54bf02049e5905f619487989e",
+        "to": "0xae186e6ae3082edd8ed44dfe1e26614d82b48747",
+        "gas": "0x106b08",
+        "value": "0x0",
+        "input": "0x0a9e8f1f0000000000000000000000004c6d2b645d5d62d79e2396b4c3564ccd83c338d5b6fba499e6921df812b67fbfd37368e9cceb8d27f5e8ac3c63cacc8e8ca9803c00000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+        "nonce": "0x2b9",
+        "chainId": "0x14a34"
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [],
+  "returns": {},
+  "timestamp": 1767402926,
+  "chain": 84532,
+  "commit": "a3f3d1b"
+}
