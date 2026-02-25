@@ -42,7 +42,9 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
     modifier onlyValidBet(Bet memory bet) {
         if (bet.outcomeSlotCount == 0) revert InvalidOutcomeSlotCount(bet.outcomeSlotCount);
         if (bet.betDuration == 0) revert InvalidBetDuration(bet.betDuration);
-        if (bet.outcomeSlotCount < 2 || bet.outcomeSlotCount > 255) revert InvalidOutcomeSlotCount(bet.outcomeSlotCount);
+        if (bet.outcomeSlotCount < 2 || bet.outcomeSlotCount > 255) {
+            revert InvalidOutcomeSlotCount(bet.outcomeSlotCount);
+        }
         _;
     }
 
@@ -112,7 +114,12 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         return questionId;
     }
 
-    function stake(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
+    function stake(
+        bytes32 questionId,
+        address token,
+        uint256 amount,
+        uint256 /* optionIndex */
+    )
         public
         onlyValidStake(questionId, token, amount)
     {
@@ -125,7 +132,12 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         );
     }
 
-    function unstake(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
+    function unstake(
+        bytes32 questionId,
+        address token,
+        uint256 amount,
+        uint256 /* optionIndex */
+    )
         public
         onlyValidStake(questionId, token, amount)
     {
@@ -134,7 +146,12 @@ contract Game is Initializable, OwnableUpgradeable, InvitationManager {
         conditionalTokens.mergePositions(IERC20(token), bytes32(0), bets[questionId].conditionId, partition, amount);
     }
 
-    function redeem(bytes32 questionId, address token, uint256 amount, uint256 /* optionIndex */)
+    function redeem(
+        bytes32 questionId,
+        address token,
+        uint256 amount,
+        uint256 /* optionIndex */
+    )
         public
         onlyValidStake(questionId, token, amount)
     {

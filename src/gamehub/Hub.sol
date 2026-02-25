@@ -6,7 +6,6 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {IHub} from "../interfaces/IHub.sol";
 import {ITokensManager} from "../interfaces/ITokensManager.sol";
-import {IGame} from "../interfaces/IGame.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 
 contract Hub is IHub, Initializable {
@@ -32,10 +31,7 @@ contract Hub is IHub, Initializable {
     mapping(bytes32 => bool) public gameShutdown;
     mapping(bytes32 => uint256) public gameShutdownTimestamp;
 
-    function initialize(address _permissionManager, address _tokensManager, address _oracleManager)
-        public
-        initializer
-    {
+    function initialize(address _permissionManager, address _tokensManager, address _oracleManager) public initializer {
         if (_permissionManager == address(0)) revert ZeroAddress();
         if (_tokensManager == address(0)) revert ZeroAddress();
         if (_oracleManager == address(0)) revert ZeroAddress();
@@ -115,7 +111,9 @@ contract Hub is IHub, Initializable {
     }
 
     function banGame(address _game) public onlyRole(GAME_CREATOR_ROLE) {
-        if (block.timestamp <= games[gameToId[_game]].createdAt + BAN_DURATION) revert BanDurationNotMet(gameToId[_game]);
+        if (block.timestamp <= games[gameToId[_game]].createdAt + BAN_DURATION) {
+            revert BanDurationNotMet(gameToId[_game]);
+        }
         bytes32 gameId = gameToId[_game];
         games[gameId].status = GameStatus.Banned;
         games[gameId].updatedAt = block.timestamp;

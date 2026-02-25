@@ -7,8 +7,9 @@ import {ITokensManager} from "../interfaces/ITokensManager.sol";
 import {TokensManager} from "./TokenManager.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {CTHelpersV2} from "../conditional/CTHelpersV2.sol";
-import {AggregatorV3Interface} from
-    "chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {
+    AggregatorV3Interface
+} from "chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/IVault.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
@@ -378,9 +379,8 @@ contract Vault is IVault, Initializable, IERC1155Receiver {
 
         for (uint256 i = 0; i < outcomeCount;) {
             uint256 indexSet = 1 << i;
-            bytes32 _collectionId = CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
-            // Note: positionId calculation kept for potential future use (_collectionId)
-            // uint256 positionId = CTHelpersV2.getPositionId(IERC20(token), collectionId);
+            CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
+            // Note: positionId from collectionId kept for potential future use
 
             // Sum all balances for this position ID (across all users)
             // Note: This is a simplified version - in production you might want to track this differently

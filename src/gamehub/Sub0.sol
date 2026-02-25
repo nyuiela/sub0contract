@@ -166,18 +166,16 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
         uint256 amount
     ) public whenInvited(questionId) {
         bytes32 conditionId = markets[questionId].conditionId;
-        IConditionalTokensV2(conditionalToken).splitPositionFor(
-            msg.sender, IERC20(token), parentCollectionId, conditionId, partition, amount
-        );
+        IConditionalTokensV2(conditionalToken)
+            .splitPositionFor(msg.sender, IERC20(token), parentCollectionId, conditionId, partition, amount);
         emit Staked(questionId, partition, token, amount);
     }
 
     function redeem(bytes32 parentCollectionId, bytes32 conditionId, uint256[] calldata indexSets, address token)
         public
     {
-        IConditionalTokensV2(conditionalToken).redeemPositionsFor(
-            msg.sender, IERC20(token), parentCollectionId, conditionId, indexSets
-        );
+        IConditionalTokensV2(conditionalToken)
+            .redeemPositionsFor(msg.sender, IERC20(token), parentCollectionId, conditionId, indexSets);
         emit Redeemed(conditionId, indexSets, token, 0);
     }
 
@@ -219,7 +217,14 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, InvitationM
     }
 
     /// @inheritdoc IReceiver
-    function onReport(bytes calldata /* metadata */, bytes calldata report) external override {
+    function onReport(
+        bytes calldata,
+        /* metadata */
+        bytes calldata report
+    )
+        external
+        override
+    {
         if (_creForwarderAddress == address(0)) revert CREForwarderNotSet();
         if (msg.sender != _creForwarderAddress) revert CREInvalidSender(msg.sender, _creForwarderAddress);
         _processReport(report);

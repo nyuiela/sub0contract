@@ -58,8 +58,8 @@ contract SetupPermissions is Script {
         address oracleAddr = vm.envAddress("ORACLE_ADDRESS");
         address hubAddr = vm.envAddress("HUB_ADDRESS");
         address vaultAddr = vm.envAddress("VAULT_ADDRESS");
-        address escrowAddr = vm.envAddress("ESCROW_ADDRESS");
         address tokensManagerAddr = vm.envAddress("TOKENS_MANAGER_ADDRESS");
+        vm.envAddress("ESCROW_ADDRESS");
 
         // Get actor addresses from environment (with deployer as default)
         superAdmin = vm.envOr("SUPER_ADMIN_ADDRESS", deployer);
@@ -234,7 +234,7 @@ contract SetupPermissions is Script {
     /**
      * @notice Verify all permissions are correctly set
      */
-    function verifyPermissions() internal {
+    function verifyPermissions() internal view {
         console2.log("\n=== Permission Verification ===");
 
         // Verify Super Admin
@@ -282,11 +282,10 @@ contract SetupPermissions is Script {
      */
     function setupNewGameContract(address gameContract, bytes32 gameId) external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerKey);
 
         // Get contract addresses from environment
         address permissionManagerAddr = vm.envAddress("PERMISSION_MANAGER_ADDRESS");
-        address escrowAddr = vm.envAddress("ESCROW_ADDRESS");
+        vm.envAddress("ESCROW_ADDRESS");
 
         // Initialize contract instances
         permissionManager = PermissionManager(permissionManagerAddr);

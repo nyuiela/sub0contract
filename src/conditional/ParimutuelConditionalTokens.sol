@@ -15,12 +15,7 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Pau
  * @dev One token type per condition; volume and user stakes tracked per outcome. No LP / 1:1 outcome tokens.
  *      Uses central IPermissionManager for roles (one permission hub). UUPS upgradeable.
  */
-contract ParimutuelConditionalTokens is
-    Initializable,
-    UUPSUpgradeable,
-    ReentrancyGuard,
-    PausableUpgradeable
-{
+contract ParimutuelConditionalTokens is Initializable, UUPSUpgradeable, ReentrancyGuard, PausableUpgradeable {
     bytes32 public constant GAME_CONTRACT_ROLE = keccak256("GAME_CONTRACT_ROLE");
     bytes32 public constant PARIMUTUEL_ADMIN_ROLE = keccak256("PARIMUTUEL_ADMIN_ROLE");
     uint256 public constant MAX_BPS = 10000;

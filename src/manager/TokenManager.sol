@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IConditionalTokens} from "../conditional/IConditionalTokens.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {PermissionManager} from "./PermissionManager.sol";
 import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 import {ITokensManager} from "../interfaces/ITokensManager.sol";
 

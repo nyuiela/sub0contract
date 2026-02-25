@@ -76,8 +76,7 @@ interface IOracle {
     /// @param betId Bet identifier within the game
     /// @param resultIndex Final index of the winning option
     /// @param supplementaryData Optional metadata (serialized proof, raw feed, etc)
-    function fulfillResult(address game, bytes32 betId, uint256 resultIndex, bytes calldata supplementaryData)
-        external;
+    function fulfillResult(address game, bytes32 betId, uint256 resultIndex, bytes calldata supplementaryData) external;
 
     /// @notice Marks a request as failed if the reporter cannot determine an outcome (by game and betId)
     /// @param game Game address

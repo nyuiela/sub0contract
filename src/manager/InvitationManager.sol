@@ -13,7 +13,6 @@ abstract contract InvitationManager {
         Single, // 1:1
         Group, // 1:n private game
         Public // 1:n public game
-
     }
 
     struct Invitation {

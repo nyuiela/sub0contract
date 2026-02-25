@@ -36,11 +36,10 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
     mapping(bytes32 => bytes32) private _questionConditionId;
     mapping(bytes32 => mapping(uint256 => bool)) public nonceUsed;
 
-    constructor(
-        address _usdc,
-        address _ctf,
-        address _backendSigner
-    ) EIP712("Sub0PredictionVault", "1") Ownable(msg.sender) {
+    constructor(address _usdc, address _ctf, address _backendSigner)
+        EIP712("Sub0PredictionVault", "1")
+        Ownable(msg.sender)
+    {
         usdc = IERC20(_usdc);
         ctf = IConditionalTokensV2(_ctf);
         backendSigner = _backendSigner;
@@ -112,15 +111,7 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
         return _hashTypedDataV4(
             keccak256(
                 abi.encode(
-                    DON_QUOTE_TYPEHASH,
-                    marketId,
-                    outcomeIndex,
-                    buy,
-                    quantity,
-                    tradeCostUsdc,
-                    user,
-                    nonce,
-                    deadline
+                    DON_QUOTE_TYPEHASH, marketId, outcomeIndex, buy, quantity, tradeCostUsdc, user, nonce, deadline
                 )
             )
         );
@@ -137,16 +128,7 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
     ) internal view returns (bytes32) {
         return _hashTypedDataV4(
             keccak256(
-                abi.encode(
-                    USER_TRADE_TYPEHASH,
-                    marketId,
-                    outcomeIndex,
-                    buy,
-                    quantity,
-                    maxCostUsdc,
-                    nonce,
-                    deadline
-                )
+                abi.encode(USER_TRADE_TYPEHASH, marketId, outcomeIndex, buy, quantity, maxCostUsdc, nonce, deadline)
             )
         );
     }
@@ -184,10 +166,19 @@ contract PredictionVault is IPredictionVault, EIP712, Ownable, ReentrancyGuard, 
         uint256 outcomeSlotCount = ctf.getOutcomeSlotCount(conditionId);
         if (outcomeIndex >= outcomeSlotCount) revert InvalidOutcome();
 
-        if (ECDSA.recover(_hashDonQuote(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user, nonce, deadline), donSignature) != donSigner) {
+        if (
+            ECDSA.recover(
+                    _hashDonQuote(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user, nonce, deadline),
+                    donSignature
+                ) != donSigner
+        ) {
             revert InvalidDonSignature();
         }
-        if (ECDSA.recover(_hashUserTrade(questionId, outcomeIndex, buy, quantity, maxCostUsdc, nonce, deadline), userSignature) != user) {
+        if (
+            ECDSA.recover(
+                    _hashUserTrade(questionId, outcomeIndex, buy, quantity, maxCostUsdc, nonce, deadline), userSignature
+                ) != user
+        ) {
             revert InvalidUserSignature();
         }
 

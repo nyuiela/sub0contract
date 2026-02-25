@@ -132,10 +132,7 @@ contract Oracle is Initializable, UUPSUpgradeable {
      * @param params Arbitrary payload forwarded to off-chain processors (e.g. API hints, match metadata).
      * @return requestId Unique identifier representing this request.
      */
-    function requestResult(address game, bytes32 questionId, bytes calldata params)
-        public
-        returns (bytes32 requestId)
-    {
+    function requestResult(address game, bytes32 questionId, bytes calldata params) public returns (bytes32 requestId) {
         // if (_activeRequestByBet[questionId] != bytes32(0)) {
         //     revert RequestAlreadyExists(questionId);
         // }

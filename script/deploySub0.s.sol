@@ -13,7 +13,6 @@ import {TokensManager} from "../src/manager/TokenManager.sol";
 import {PermissionManager} from "../src/manager/PermissionManager.sol";
 import {Oracle} from "../src/oracle/oracle.sol";
 import {IVault} from "../src/interfaces/IVault.sol";
-import {IPermissionManager} from "../src/interfaces/IPermissionManager.sol";
 import {TestERC20} from "../src/mocks/TestERC20.sol";
 
 /**

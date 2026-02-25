@@ -5,7 +5,6 @@ import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Sub0} from "../src/gamehub/Sub0.sol";
 import {InvitationManager} from "../src/manager/InvitationManager.sol";
-import {IHub} from "../src/interfaces/IHub.sol";
 
 /**
  * @title CreateMarket
