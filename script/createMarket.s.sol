@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Sub0} from "../src/gamehub/Sub0.sol";
-import {InvitationManager} from "../src/manager/InvitationManager.sol";
 import {IHub} from "../src/interfaces/IHub.sol";
 
 /**
@@ -17,7 +16,7 @@ import {IHub} from "../src/interfaces/IHub.sol";
  * - QUESTION: The market question (string)
  * - ORACLE_ADDRESS: Oracle that will resolve the market
  * - ORACLE_TYPE: uint8 (1=PLATFORM, 2=ARBITRATOR, 3=CUSTOM)
- * - BET_TYPE: uint8 (0=Single, 1=Group, 2=Public)
+ * - BET_TYPE: uint8 (0=Private, 1=Public)
  * - DURATION: Duration in seconds
  * - OUTCOME_SLOT_COUNT: Number of outcomes (2-255)
  */
@@ -52,7 +51,7 @@ contract CreateMarket is Script {
 
         Sub0 sub0 = Sub0(payable(sub0Address));
         require(oracleTypeRaw <= 3 && oracleTypeRaw != 0, "Invalid OracleType");
-        require(betTypeRaw <= 2, "Invalid BetType");
+        require(betTypeRaw <= 1, "Invalid BetType (0=Private, 1=Public)");
         require(outcomeSlotCount >= 2 && outcomeSlotCount <= 255, "Invalid outcome slot count");
         require(duration > 0, "Duration must be > 0");
 
@@ -70,7 +69,7 @@ contract CreateMarket is Script {
             duration: duration,
             outcomeSlotCount: outcomeSlotCount,
             oracleType: oracleType,
-            marketType: InvitationManager.InvitationType(betTypeRaw)
+            marketType: Sub0.MarketType(betTypeRaw)
         });
 
         vm.startBroadcast(callerKey);

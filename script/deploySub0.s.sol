@@ -25,7 +25,7 @@ import {TestERC20} from "../src/mocks/TestERC20.sol";
  * - USDC_ADDRESS: USDC for PredictionVault (optional; deploys TestERC20 if not set)
  * - DON_SIGNER_ADDRESS: DON signer for CRE quote signatures (used for PredictionVault; fallback: BACKEND_SIGNER_ADDRESS, then deployer)
  * - BACKEND_SIGNER_ADDRESS: Legacy fallback if DON_SIGNER_ADDRESS not set
- * - CRE_FORWARDER_ADDRESS: Chainlink CRE forwarder allowed to call onReport (optional; default: address(0))
+ * - CRE_FORWARDER_ADDRESS: Chainlink CRE forwarder allowed to call onReport (optional; default: deployer; set to real forwarder for production)
  */
 contract DeploySub0 is Script {
     bytes32 public constant TOKEN_MANAGER_ROLE = keccak256("TOKEN_MANAGER_ROLE");
@@ -38,7 +38,7 @@ contract DeploySub0 is Script {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
         address donSigner = vm.envOr("DON_SIGNER_ADDRESS", vm.envOr("BACKEND_SIGNER_ADDRESS", deployer));
-        address creForwarder = vm.envOr("CRE_FORWARDER_ADDRESS", address(0));
+        address creForwarder = vm.envOr("CRE_FORWARDER_ADDRESS", deployer);
 
         console2.log("=== Sub0 Deployment ===");
         console2.log("Deployer:", deployer);

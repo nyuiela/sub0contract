@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {console2} from "forge-std/console2.sol";
 import {Sub0} from "../src/gamehub/Sub0.sol";
-import {InvitationManager} from "../src/manager/InvitationManager.sol";
 import {IHub} from "../src/interfaces/IHub.sol";
 
 /**
@@ -18,7 +17,7 @@ import {IHub} from "../src/interfaces/IHub.sol";
  * - QUESTION: The bet question (string)
  * - ORACLE_ADDRESS: The oracle address that will resolve the bet
  * - ORACLE_TYPE: Oracle type as uint8 (0=NONE, 1=PLATFORM, 2=ARBITRATOR, 3=CUSTOM)
- * - BET_TYPE: Bet type as uint8 (0=Single, 1=Group, 2=Public)
+ * - BET_TYPE: Bet type as uint8 (0=Private, 1=Public)
  * - DURATION: Bet duration in seconds (uint256)
  * - OUTCOME_SLOT_COUNT: Number of possible outcomes (uint256, must be >= 2 and <= 255)
  *
@@ -62,9 +61,9 @@ contract CreateBet is Script {
             revert("OracleType.NONE is not allowed");
         }
 
-        // Validate InvitationType
-        require(betTypeRaw <= 2, "Invalid BetType (must be 0-2)");
-        InvitationManager.InvitationType betType = InvitationManager.InvitationType(betTypeRaw);
+        // Validate MarketType (0=Private, 1=Public)
+        require(betTypeRaw <= 1, "Invalid BetType (must be 0=Private or 1=Public)");
+        Sub0.MarketType marketType = Sub0.MarketType(betTypeRaw);
 
         // Validate outcome slot count
         require(outcomeSlotCount >= 2 && outcomeSlotCount <= 255, "Invalid outcome slot count (must be 2-255)");
@@ -84,7 +83,7 @@ contract CreateBet is Script {
         }
 
         // Check if Public bet requires GAME_CREATOR_ROLE
-        if (betType == InvitationManager.InvitationType.Public) {
+        if (marketType == Sub0.MarketType.Public) {
             console2.log("[INFO] Public bets require GAME_CREATOR_ROLE");
             // This will be checked by the contract
         }
@@ -102,7 +101,7 @@ contract CreateBet is Script {
             duration: duration,
             outcomeSlotCount: outcomeSlotCount,
             oracleType: oracleType,
-            marketType: betType
+            marketType: marketType
         });
 
         console2.log("Creating bet...");
@@ -135,7 +134,7 @@ contract CreateBet is Script {
         require(createdMarket.duration == duration, "Duration mismatch");
         require(createdMarket.outcomeSlotCount == outcomeSlotCount, "Outcome slot count mismatch");
         require(createdMarket.oracleType == oracleType, "Oracle type mismatch");
-        require(createdMarket.marketType == betType, "Market type mismatch");
+        require(createdMarket.marketType == marketType, "Market type mismatch");
         require(createdMarket.conditionId != bytes32(0), "Condition ID not set");
 
         console2.log("All values verified: [OK]");

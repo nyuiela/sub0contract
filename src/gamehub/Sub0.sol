@@ -4,7 +4,8 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {InvitationManager} from "../manager/InvitationManager.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {ITokensManager} from "../interfaces/ITokensManager.sol";
 import {IHub} from "../interfaces/IHub.sol";
 import {IVault} from "../interfaces/IVault.sol";
@@ -18,10 +19,11 @@ import {ReceiverTemplate} from "../interfaces/ReceiverTemplate.sol";
 /**
  * @title Sub0
  * @notice Sub0 prediction market factory: creates markets, integrates with PredictionVault (inventory AMM) and ConditionalTokensV2.
- * @dev Implements IReceiver for CRE: set CRE Forwarder via setCreForwarderAddress and grant it GAME_CREATOR_ROLE for Public markets.
- *      After upgrade: (1) setCreForwarderAddress(chainForwarder), (2) grant GAME_CREATOR_ROLE to that forwarder.
+ * @dev Implements IReceiver for CRE: set CRE Forwarder via setForwarderAddress and grant it GAME_CREATOR_ROLE for Public markets.
+ *      Redeem requires EIP-712 signature from the redeemer (owner of positions).
  */
-contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTemplate {
+contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable, ReceiverTemplate {
+    using ECDSA for bytes32;
     bytes32 public constant ORACLE = keccak256("ORACLE");
     bytes32 public constant TOKENS = keccak256("TOKENS");
     bytes32 public constant GAME_CREATOR_ROLE = keccak256("GAME_CREATOR_ROLE");
@@ -40,6 +42,11 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
 
     mapping(bytes32 => Market) public markets;
 
+    enum MarketType {
+        Private,
+        Public
+    }
+
     struct Market {
         string question;
         bytes32 conditionId;
@@ -49,8 +56,13 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
         uint256 duration;
         uint256 outcomeSlotCount;
         OracleType oracleType;
-        InvitationManager.InvitationType marketType;
+        MarketType marketType;
     }
+
+    bytes32 public constant REDEEM_TYPEHASH = keccak256(
+        "Redeem(bytes32 parentCollectionId,bytes32 conditionId,bytes32 indexSetsHash,address token,uint256 deadline,uint256 nonce)"
+    );
+    mapping(address => uint256) public redeemNonce;
 
     struct Config {
         address hub;
@@ -107,6 +119,9 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
     error CREReportTooShort();
     error CREForwarderNotSet();
     error CREUnknownAction(uint8 prefix);
+    error RedeemExpired();
+    error RedeemBadNonce();
+    error RedeemInvalidSignature();
 
     /// @dev CRE report action prefixes: first byte of report routes to the correct handler.
     uint8 private constant CRE_ACTION_CREATE = 0x00;
@@ -118,7 +133,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
         bytes32 questionId,
         string question,
         OracleType oracleType,
-        InvitationManager.InvitationType marketType,
+        MarketType marketType,
         address owner
     );
     event BetResolved(bytes32 questionId, uint256[] payouts);
@@ -130,6 +145,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
         if (_config.permissionManager == address(0)) revert ZeroAddress();
         if (_config.hub == address(0)) revert ZeroAddress();
         __Ownable_init(msg.sender);
+        __EIP712_init("Sub0", "1");
         __ReceiverTemplate_init(_config.creForwarder);
         tokenManager = ITokensManager(_config.tokenManager);
         hub = IHub(_config.hub);
@@ -148,7 +164,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
         // Verify the actual creator has the right roles
         if (
             !permissionManager.hasRole(GAME_CREATOR_ROLE, actualCreator)
-                && market.marketType == InvitationManager.InvitationType.Public
+                && market.marketType == MarketType.Public
         ) {
             revert PublicBetNotAllowed();
         }
@@ -185,10 +201,61 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
         _stakeInternal(questionId, parentCollectionId, partition, token, amount, msg.sender);
     }
 
-    function redeem(bytes32 parentCollectionId, bytes32 conditionId, uint256[] calldata indexSets, address token)
-        public
-    {
-        _redeemInternal(parentCollectionId, conditionId, indexSets, token, msg.sender);
+    /// @notice Redeem positions; requires EIP-712 signature from the account that owns the positions.
+    /// @param deadline Expiry of the signature.
+    /// @param nonce Redeemer's current nonce (incremented after use).
+    /// @param signature EIP-712 signature over Redeem(parentCollectionId, conditionId, keccak256(abi.encode(indexSets)), token, deadline, nonce).
+    function redeem(
+        bytes32 parentCollectionId,
+        bytes32 conditionId,
+        uint256[] calldata indexSets,
+        address token,
+        uint256 deadline,
+        uint256 nonce,
+        bytes calldata signature
+    ) public {
+        if (block.timestamp > deadline) revert RedeemExpired();
+        bytes32 indexSetsHash = keccak256(abi.encode(indexSets));
+        address signer = _hashRedeem(parentCollectionId, conditionId, indexSetsHash, token, deadline, nonce)
+            .recover(signature);
+        if (redeemNonce[signer] != nonce) revert RedeemBadNonce();
+        redeemNonce[signer]++;
+        _redeemInternal(parentCollectionId, conditionId, indexSets, token, signer);
+    }
+
+    /// @notice Returns the EIP-712 digest for Redeem; use this off-chain to produce the signature.
+    function getRedeemDigest(
+        bytes32 parentCollectionId,
+        bytes32 conditionId,
+        bytes32 indexSetsHash,
+        address token,
+        uint256 deadline,
+        uint256 nonce
+    ) external view returns (bytes32) {
+        return _hashRedeem(parentCollectionId, conditionId, indexSetsHash, token, deadline, nonce);
+    }
+
+    function _hashRedeem(
+        bytes32 parentCollectionId,
+        bytes32 conditionId,
+        bytes32 indexSetsHash,
+        address token,
+        uint256 deadline,
+        uint256 nonce
+    ) internal view returns (bytes32) {
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    REDEEM_TYPEHASH,
+                    parentCollectionId,
+                    conditionId,
+                    indexSetsHash,
+                    token,
+                    deadline,
+                    nonce
+                )
+            )
+        );
     }
 
     function resolve(bytes32 questionId, uint256[] calldata payouts) public {
@@ -252,7 +319,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
     ///      - 0x00: create  → payload = abi.encode(Market)
     ///      - 0x01: resolve → payload = abi.encode(questionId, payouts, oracle)
     ///      - 0x02: stake   → payload = abi.encode(questionId, parentCollectionId, partition, token, amount, owner)
-    ///      - 0x03: redeem  → payload = abi.encode(parentCollectionId, conditionId, indexSets, token, owner)
+    ///      - 0x03: redeem  → payload = abi.encode(parentCollectionId, conditionId, indexSets, token, owner, deadline, nonce, signature)
     function _processReport(bytes calldata report) internal override {
         if (report.length == 0) revert CREReportTooShort();
         uint8 action = uint8(report[0]);
@@ -282,8 +349,23 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, ReceiverTem
             return;
         }
         if (action == CRE_ACTION_REDEEM) {
-            (bytes32 parentCollectionId, bytes32 conditionId, uint256[] memory indexSets, address token, address _owner) =
-                abi.decode(payload, (bytes32, bytes32, uint256[], address, address));
+            (
+                bytes32 parentCollectionId,
+                bytes32 conditionId,
+                uint256[] memory indexSets,
+                address token,
+                address _owner,
+                uint256 deadline,
+                uint256 nonce,
+                bytes memory signature
+            ) = abi.decode(payload, (bytes32, bytes32, uint256[], address, address, uint256, uint256, bytes));
+            if (block.timestamp > deadline) revert RedeemExpired();
+            bytes32 indexSetsHash = keccak256(abi.encode(indexSets));
+            address signer = _hashRedeem(parentCollectionId, conditionId, indexSetsHash, token, deadline, nonce)
+                .recover(signature);
+            if (signer != _owner) revert RedeemInvalidSignature();
+            if (redeemNonce[signer] != nonce) revert RedeemBadNonce();
+            redeemNonce[signer]++;
             _redeemInternal(parentCollectionId, conditionId, indexSets, token, _owner);
             return;
         }

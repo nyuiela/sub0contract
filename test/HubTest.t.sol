@@ -16,7 +16,6 @@ import {Oracle} from "../src/oracle/oracle.sol";
 import {MockChainlinkResultOracle} from "./mocks/MockChainlinkResultOracle.sol";
 import {IHub} from "../src/interfaces/IHub.sol";
 import {IVault} from "../src/interfaces/IVault.sol";
-import {InvitationManager} from "../src/manager/InvitationManager.sol";
 
 contract HubTest is Test {
     bytes32 public constant TOKEN_MANAGER_ROLE = keccak256("TOKEN_MANAGER_ROLE");
@@ -110,7 +109,7 @@ contract HubTest is Test {
             permissionManager: address(permissionManager),
             conditionalToken: address(conditionalTokensV2),
             predictionVault: address(0),
-            creForwarder: address(0)
+            creForwarder: address(1)
         });
         bytes memory sub0InitData = abi.encodeWithSelector(Sub0.initialize.selector, sub0Config);
         ERC1967Proxy sub0Proxy = new ERC1967Proxy(address(sub0Impl), sub0InitData);
@@ -139,7 +138,7 @@ contract HubTest is Test {
         uint256 duration,
         uint256 outcomeSlotCount,
         Sub0.OracleType oracleType,
-        InvitationManager.InvitationType marketType
+        Sub0.MarketType marketType
     ) internal pure returns (Sub0.Market memory) {
         return Sub0.Market({
             question: question,
@@ -463,7 +462,7 @@ contract HubTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         assertTrue(questionId != bytes32(0));
@@ -487,7 +486,7 @@ contract HubTest is Test {
         //     duration: 1 days,
         //     outcomeSlotCount: 2,
         //     oracleType: Sub0.OracleType.ARBITRATOR,
-        //     betType: InvitationManager.InvitationType.Single
+        //     betType: Sub0.MarketType.Private
         // });
 
         // This should revert if Sub0 checks verifyGame, but currently it doesn't
@@ -511,7 +510,7 @@ contract HubTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
@@ -552,7 +551,7 @@ contract HubTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
@@ -610,7 +609,7 @@ contract HubTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         assertTrue(questionId != bytes32(0));
