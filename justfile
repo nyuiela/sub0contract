@@ -100,7 +100,7 @@ allowlist-reporter network="base-sepolia":
 
 upgrade-sub0 network="base-sepolia":
   @echo "Upgrading Sub0 on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/upgradeSub0.s.sol:UpgradeSub0 -vvvv \
+  forge script script/upgradeSub0.s.sol:UpgradeSub0 -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
 
@@ -109,3 +109,15 @@ set-cre-forwarder-config network="sepolia":
   forge script script/setCreForwarderConfig.s.sol:SetCreForwarderConfig -vvvv \
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
+
+# Verify on Etherscan (Sepolia). Sub0 is a proxy: verify IMPLEMENTATION address.
+# Get implementation: cast implementation <PROXY_ADDRESS> --rpc-url <RPC>
+# Then: just verify-sepolia <IMPLEMENTATION_ADDRESS>
+verify-sepolia impl_address:
+  @echo "Verifying Sub0 implementation on Sepolia..."
+  forge verify-contract {{impl_address}} src/gamehub/Sub0.sol:Sub0 \
+    --chain-id 11155111 \
+    --verifier etherscan \
+    --etherscan-api-key $ETHERSCAN_API_KEY \
+    --rpc-url {{rpc_sepolia}} \
+    --watch

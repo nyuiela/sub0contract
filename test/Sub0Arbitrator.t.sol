@@ -14,7 +14,6 @@ import {PermissionManager} from "../src/manager/PermissionManager.sol";
 import {IHub} from "../src/interfaces/IHub.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {InvitationManager} from "../src/manager/InvitationManager.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {MockAggregatorV3} from "./MockAggregatorV3.sol";
 import {IVault} from "../src/interfaces/IVault.sol";
@@ -107,7 +106,7 @@ contract Sub0ArbitratorTest is Test {
             permissionManager: address(permissionManager),
             conditionalToken: address(conditionalTokensV2),
             predictionVault: address(0),
-            creForwarder: address(0)
+            creForwarder: address(1)
         });
         bytes memory sub0InitData = abi.encodeWithSelector(Sub0.initialize.selector, sub0Config);
         ERC1967Proxy sub0Proxy = new ERC1967Proxy(address(sub0Impl), sub0InitData);
@@ -138,40 +137,13 @@ contract Sub0ArbitratorTest is Test {
         vault.setFeeConfig(address(this), 500);
     }
 
-    /**
-     * @notice Helper function to add users to invitation and have them accept
-     * @param questionId The question ID
-     * @param betOwner The owner of the bet (who created it)
-     * @param users Array of users to invite
-     */
-    function _inviteAndAcceptUsers(bytes32 questionId, address betOwner, address[] memory users) internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            // Owner adds user to invitation
-            vm.prank(betOwner);
-            sub0.addUser(questionId, users[i]);
-
-            // User accepts invitation
-            vm.prank(users[i]);
-            sub0.acceptInvitation(questionId);
-        }
-    }
-
-    /**
-     * @notice Helper function for single user invitation
-     */
-    function _inviteAndAcceptUser(bytes32 questionId, address betOwner, address user) internal {
-        address[] memory users = new address[](1);
-        users[0] = user;
-        _inviteAndAcceptUsers(questionId, betOwner, users);
-    }
-
     function _market(
         string memory question,
         address _oracle,
         uint256 duration,
         uint256 outcomeSlotCount,
         Sub0.OracleType oracleType,
-        InvitationManager.InvitationType marketType
+        Sub0.MarketType marketType
     ) internal pure returns (Sub0.Market memory) {
         return Sub0.Market({
             question: question,
@@ -205,7 +177,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         Sub0.Market memory storedMarket = sub0.getMarket(questionId);
@@ -224,7 +196,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 3,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         Sub0.Market memory storedMarket = sub0.getMarket(questionId);
@@ -241,7 +213,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
@@ -250,7 +222,6 @@ contract Sub0ArbitratorTest is Test {
         users[0] = user1;
         users[1] = user2;
         users[2] = user3;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -297,12 +268,9 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
-
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -332,7 +300,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -352,7 +320,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -372,7 +340,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -392,12 +360,10 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 3,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -429,12 +395,10 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 5,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
-        // Invite and accept invitation for user1
-        _inviteAndAcceptUser(questionId, address(this), user1);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -467,7 +431,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
 
@@ -476,7 +440,6 @@ contract Sub0ArbitratorTest is Test {
         users[0] = user1;
         users[1] = user2;
         users[2] = user3;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -534,7 +497,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -558,7 +521,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -582,7 +545,7 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
         uint256[] memory payouts = new uint256[](2);
@@ -602,12 +565,12 @@ contract Sub0ArbitratorTest is Test {
                 1 days,
                 2,
                 Sub0.OracleType.ARBITRATOR,
-                InvitationManager.InvitationType.Public
+                Sub0.MarketType.Public
             )
         );
         Sub0.Market memory storedMarket = sub0.getMarket(questionId);
 
-        assertEq(uint256(storedMarket.marketType), uint256(InvitationManager.InvitationType.Public));
+        assertEq(uint256(storedMarket.marketType), uint256(Sub0.MarketType.Public));
         assertEq(uint256(storedMarket.oracleType), uint256(Sub0.OracleType.ARBITRATOR));
     }
 }

@@ -37,17 +37,22 @@ abstract contract InvitationManager {
 
     //modifiers
     modifier whenInvited(bytes32 questionId) {
+        _requireInvitedAndMarkAccepted(questionId, msg.sender);
+        _;
+    }
+
+    /// @dev Same logic as whenInvited but for an arbitrary account (e.g. CRE staking on behalf of a user).
+    function _requireInvitedAndMarkAccepted(bytes32 questionId, address account) internal {
         if (
             invitations[questionId].invitationType == InvitationType.Single
                 || invitations[questionId].invitationType == InvitationType.Group
         ) {
             if (
-                invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Accepted
-                    && invitations[questionId].usersInvitationStatus[msg.sender] != InvitationStatus.Pending
-            ) revert UserNotInvited(msg.sender);
-            invitations[questionId].usersInvitationStatus[msg.sender] = InvitationStatus.Accepted;
+                invitations[questionId].usersInvitationStatus[account] != InvitationStatus.Accepted
+                    && invitations[questionId].usersInvitationStatus[account] != InvitationStatus.Pending
+            ) revert UserNotInvited(account);
+            invitations[questionId].usersInvitationStatus[account] = InvitationStatus.Accepted;
         }
-        _;
     }
 
     // function isInvited(bytes32 questionId, address user) external view returns (bool) {

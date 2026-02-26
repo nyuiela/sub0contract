@@ -130,11 +130,17 @@ contract Redeem is Script {
             console2.log("");
         }
 
-        // Redeem via Sub0 (parentCollectionId, conditionId, indexSets, token)
+        // Redeem via Sub0 (requires EIP-712 signature from redeemer)
         uint256[] memory indexSets = new uint256[](1);
         indexSets[0] = indexSet;
+        uint256 deadline = block.timestamp + 3600;
+        uint256 nonce = sub0.redeemNonce(redeemer);
+        bytes32 indexSetsHash = keccak256(abi.encode(indexSets));
+        bytes32 digest = sub0.getRedeemDigest(bytes32(0), conditionId, indexSetsHash, payoutToken, deadline, nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(redeemerKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
         console2.log("Redeeming winning positions...");
-        sub0.redeem(bytes32(0), conditionId, indexSets, payoutToken);
+        sub0.redeem(bytes32(0), conditionId, indexSets, payoutToken, deadline, nonce, signature);
         console2.log("[OK] Successfully redeemed option", option);
         console2.log("");
 

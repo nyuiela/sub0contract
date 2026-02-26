@@ -7,12 +7,10 @@ viaIR = true
 optimizer = true
 # Lower runs = smaller bytecode (stays under 24kb limit); increase for production if needed
 optimizer_runs = 200
+cbor_metadata = true
 extra_output = ["metadata"]
 
-# Run lint only when you call `forge lint`; keeps `forge build` output clean
-[lint]
-lint_on_build = false
-
+ 
 
 # File system permissions for scripts
 fs_permissions = [

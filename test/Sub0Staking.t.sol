@@ -14,7 +14,6 @@ import {PermissionManager} from "../src/manager/PermissionManager.sol";
 import {IHub} from "../src/interfaces/IHub.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {InvitationManager} from "../src/manager/InvitationManager.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {MockAggregatorV3} from "./MockAggregatorV3.sol";
 import {IVault} from "../src/interfaces/IVault.sol";
@@ -105,7 +104,7 @@ contract Sub0StakingTest is Test {
             permissionManager: address(permissionManager),
             conditionalToken: address(conditionalTokensV2),
             predictionVault: address(0),
-            creForwarder: address(0)
+            creForwarder: address(1)
         });
         bytes memory sub0InitData = abi.encodeWithSelector(Sub0.initialize.selector, sub0Config);
         ERC1967Proxy sub0Proxy = new ERC1967Proxy(address(sub0Impl), sub0InitData);
@@ -143,7 +142,7 @@ contract Sub0StakingTest is Test {
         uint256 duration,
         uint256 outcomeSlotCount,
         Sub0.OracleType oracleType,
-        InvitationManager.InvitationType marketType
+        Sub0.MarketType marketType
     ) internal pure returns (Sub0.Market memory) {
         return Sub0.Market({
             question: question,
@@ -169,41 +168,13 @@ contract Sub0StakingTest is Test {
         sub0.stake(questionId, bytes32(0), partition, token, amount);
     }
 
-    /**
-     * @notice Helper function to add users to invitation and have them accept
-     * @param questionId The question ID
-     * @param betOwner The owner of the bet (who created it)
-     * @param users Array of users to invite
-     */
-    function _inviteAndAcceptUsers(bytes32 questionId, address betOwner, address[] memory users) internal {
-        for (uint256 i = 0; i < users.length; i++) {
-            // Owner adds user to invitation
-            vm.prank(betOwner);
-            sub0.addUser(questionId, users[i]);
-
-            // User accepts invitation
-            vm.prank(users[i]);
-            sub0.acceptInvitation(questionId);
-        }
-    }
-
-    /**
-     * @notice Helper function for single user invitation
-     */
-    function _inviteAndAcceptUser(bytes32 questionId, address betOwner, address _user) internal {
-        address[] memory users = new address[](1);
-        users[0] = _user;
-        _inviteAndAcceptUsers(questionId, betOwner, users);
-    }
 
     function testStakeAndReceiveConditionalTokens() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -225,11 +196,9 @@ contract Sub0StakingTest is Test {
     function testStakeOnDifferentOptions() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -259,14 +228,13 @@ contract Sub0StakingTest is Test {
     function testStakeMultipleUsers() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
         address[] memory users = new address[](2);
         users[0] = user;
         users[1] = user2;
-        _inviteAndAcceptUsers(questionId, address(this), users);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -301,8 +269,8 @@ contract Sub0StakingTest is Test {
     }
 
     function testStakeWithInvalidQuestionId() public {
-        // whenInvited(0) runs first and reverts with UserNotInvited (no market for bytes32(0))
-        vm.expectRevert(abi.encodeWithSelector(InvitationManager.UserNotInvited.selector, address(this)));
+        // No market for bytes32(0); conditionId is zero and CT/Vault reverts with ConditionNotPrepared
+        vm.expectRevert(abi.encodeWithSelector(IConditionalTokensV2.ConditionNotPrepared.selector));
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
         partition[1] = 2;
@@ -312,10 +280,9 @@ contract Sub0StakingTest is Test {
     function testStakeWithZeroTokenAddress() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
@@ -330,10 +297,9 @@ contract Sub0StakingTest is Test {
         invalidToken.mint(user, 1000 * 10 ** 18);
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256[] memory partition = new uint256[](2);
         partition[0] = 1;
@@ -348,11 +314,10 @@ contract Sub0StakingTest is Test {
     function testStakeWithInvalidOptionIndex() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -372,11 +337,10 @@ contract Sub0StakingTest is Test {
     function testStakeEmitsStakedEvent() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -397,11 +361,10 @@ contract Sub0StakingTest is Test {
     function testStakeTransfersTokensToConditionalTokens() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -424,11 +387,10 @@ contract Sub0StakingTest is Test {
     function testStakeWithMultipleStakesOnSameOption() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -452,12 +414,10 @@ contract Sub0StakingTest is Test {
     function testStakeWithThreeOutcomes() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 3, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 3, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
-
+  
         uint256 stakeAmount = 1000 * 10 ** 18;
 
         collateralToken.mint(user, stakeAmount * 3);
@@ -482,11 +442,10 @@ contract Sub0StakingTest is Test {
     function testStakeWithFourOutcomes() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 4, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 4, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
 
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -512,11 +471,9 @@ contract Sub0StakingTest is Test {
     function testStakeWithFiveOutcomes() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 5, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 5, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -547,11 +504,9 @@ contract Sub0StakingTest is Test {
                 1 days,
                 10,
                 Sub0.OracleType.PLATFORM,
-                InvitationManager.InvitationType.Single
+                Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -577,11 +532,9 @@ contract Sub0StakingTest is Test {
     function testStakeIncreasesVaultBalance() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
@@ -601,10 +554,9 @@ contract Sub0StakingTest is Test {
     function testStakeWithInsufficientAllowance() public {
         bytes32 questionId = sub0.create(
             _market(
-                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, InvitationManager.InvitationType.Single
+                "Who will win?", oracle, 1 days, 2, Sub0.OracleType.PLATFORM, Sub0.MarketType.Private
             )
         );
-        _inviteAndAcceptUser(questionId, address(this), user);
 
         uint256 stakeAmount = 1000 * 10 ** 18;
 
