@@ -75,6 +75,7 @@ interface IPredictionVault {
         bytes calldata donSignature,
         bytes calldata userSignature
     ) external;
+    
 
     /**
      * @dev Returns the CTF condition ID for a registered question.

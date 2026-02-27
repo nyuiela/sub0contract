@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
 import {ReceiverTemplate} from "./ReceiverTemplate.sol";
+import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 
 /**
  * @title PredictionVault
@@ -29,7 +30,7 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
     error CREReportTooShort();
     error CREUnknownAction(uint8 prefix);
     error CRESeedLiquidityNotOwner();
-
+    error NotAuthorized(address account, bytes32 role);
     bytes32 public constant DON_QUOTE_TYPEHASH = keccak256(
         "DONQuote(bytes32 marketId,uint256 outcomeIndex,bool buy,uint256 quantity,uint256 tradeCostUsdc,address user,uint256 nonce,uint256 deadline)"
     );
@@ -37,27 +38,34 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
         "UserTrade(bytes32 marketId,uint256 outcomeIndex,bool buy,uint256 quantity,uint256 maxCostUsdc,uint256 nonce,uint256 deadline)"
     );
 
-    IERC20 public immutable usdc;
-    IConditionalTokensV2 public immutable ctf;
+    IERC20 public usdc;
+    IConditionalTokensV2 public ctf;
     address public override backendSigner;
     address public override donSigner;
-
+    IPermissionManager public permissionManager;
     uint256 public constant USDC_DECIMALS = 6;
 
     mapping(bytes32 => bytes32) private _questionConditionId;
     mapping(bytes32 => mapping(uint256 => bool)) public nonceUsed;
+    bytes32 public constant GAME_CONTRACT_ROLE = keccak256("GAME_CONTRACT_ROLE");
+    modifier onlyAuthorized(bytes32 role) {
+        if (!permissionManager.hasRole(GAME_CONTRACT_ROLE, msg.sender)) revert NotAuthorized(msg.sender, GAME_CONTRACT_ROLE);
+        _;
+    }
 
     constructor(
         address _usdc,
         address _ctf,
         address _backendSigner,
-        address _creForwarder
+        address _creForwarder,
+        address _permissionManager
     ) EIP712("Sub0PredictionVault", "1") ReceiverTemplate(msg.sender, _creForwarder)
      {
         usdc = IERC20(_usdc);
         ctf = IConditionalTokensV2(_ctf);
         backendSigner = _backendSigner;
         donSigner = _backendSigner;
+        permissionManager = IPermissionManager(_permissionManager);
     }
 
 
@@ -73,8 +81,7 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
         emit DonSignerSet(old, _donSigner);
     }
 
-    function registerMarket(bytes32 questionId, bytes32 conditionId) external override onlyOwner {
-        if (conditionId == bytes32(0)) revert InvalidOutcome();
+    function registerMarket(bytes32 questionId, bytes32 conditionId) external override onlyAuthorized(GAME_CONTRACT_ROLE) {
         if (_questionConditionId[questionId] != bytes32(0)) revert InvalidOutcome();
         _questionConditionId[questionId] = conditionId;
         emit MarketRegistered(questionId, conditionId);
@@ -93,7 +100,6 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
     }
 
     function _seedMarketLiquidityInternal(bytes32 questionId, uint256 amountUsdc) internal nonReentrant {
-        if (owner() != msg.sender) revert CRESeedLiquidityNotOwner();
         bytes32 conditionId = _questionConditionId[questionId];
         if (conditionId == bytes32(0)) revert MarketNotRegistered();
 
@@ -165,7 +171,67 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
      *      BUY: tradeCostUsdc <= maxCostUsdc; USDC from user to vault; CTF from vault to user.
      *      SELL: tradeCostUsdc >= maxCostUsdc (min receive); CTF from user to vault; USDC from vault to user.
      */
-    function executeTrade(
+  //  function executeTrades(
+  //       bytes32 questionId,
+  //       uint256 outcomeIndex,
+  //       bool[] calldata buys,
+  //       uint256[] calldata quantities,
+  //       uint256[] calldata tradeCostUsdc,
+  //       uint256[] calldata maxCostUsdc,
+  //       uint256 nonce,
+  //       uint256 deadline,
+  //       address[] calldata users,
+  //       bytes calldata donSignature,
+  //       bytes[] calldata userSignatures
+  //   ) external override nonReentrant {
+  //     // require(buys)
+  //       if (block.timestamp > deadline) revert ExpiredQuote();
+  //       if (nonceUsed[questionId][nonce]) revert NonceAlreadyUsed();
+
+  //       bytes32 conditionId = _questionConditionId[questionId];
+  //       if (conditionId == bytes32(0)) revert MarketNotRegistered();
+
+  //       for (uint256 i = 0; i < buys.length; i++) {
+  //         bool buy = buys[i];
+  //         uint256 quantity = quantities[i];
+  //         uint256 _tradeCostUsdc = tradeCostUsdc[i];
+  //         uint256 _maxCostUsdc = maxCostUsdc[i];
+  //         address user = users[i];
+  //         bytes memory userSignature = userSignatures[i];
+  //       uint256 outcomeSlotCount = ctf.getOutcomeSlotCount(conditionId);
+  //       if (outcomeIndex >= outcomeSlotCount) revert InvalidOutcome();
+
+  //       if (ECDSA.recover(_hashDonQuote(questionId, outcomeIndex, buy, quantity, _tradeCostUsdc, user, nonce, deadline), donSignature) != donSigner) {
+  //           revert InvalidDonSignature();
+  //       }
+  //       if (ECDSA.recover(_hashUserTrade(questionId, outcomeIndex, buy, quantity, _maxCostUsdc, nonce, deadline), userSignature) != user) {
+  //           revert InvalidUserSignature();
+  //       }
+
+  //       if (buy) {
+  //           if (_tradeCostUsdc > _maxCostUsdc) revert SlippageExceeded();
+  //       } else {
+  //           if (_tradeCostUsdc < _maxCostUsdc) revert SlippageExceeded();
+  //       }
+  //       }
+
+
+  //       uint256 positionId = _getPositionId(conditionId, outcomeIndex);
+
+  //       if (buys[0]) {
+  //           if (ctf.balanceOf(users[1], positionId) < quantities[1]) revert InsufficientVaultBalance();
+  //           if (tradeCostUsdc[0] > 0 && !usdc.transferFrom(users[0], users[1], tradeCostUsdc[1])) revert TransferFailed();
+  //           ctf.safeTransferFrom(users[1], users[0], positionId, quantities[1], "");
+  //       } else {
+  //           if (usdc.balanceOf(users[1]) < tradeCostUsdc[0]) revert InsufficientUsdcSolvency();
+  //           ctf.safeTransferFrom(users[0], users[1], positionId, quantities[0], "");
+  //           if (tradeCostUsdc[0] > 0 && !usdc.transfer(users[1], tradeCostUsdc[0])) revert TransferFailed();
+  //       }
+
+  //       nonceUsed[questionId][nonce] = true;
+  //       // emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
+  //   }
+        function executeTrade(
         bytes32 questionId,
         uint256 outcomeIndex,
         bool buy,
@@ -225,6 +291,23 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
 
         emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
     }
+
+struct Config {
+    address permissionManager;
+    address usdc;
+    address ctf;
+    address backendSigner;
+    address donSigner;
+}
+    function setConfig(Config memory _config) external onlyOwner {
+        if (_config.permissionManager != address(0)) permissionManager = IPermissionManager(_config.permissionManager);
+        if (_config.usdc != address(0)) usdc = IERC20(_config.usdc);
+        if (_config.ctf != address(0)) ctf = IConditionalTokensV2(_config.ctf);
+        if (_config.backendSigner != address(0)) backendSigner = _config.backendSigner;
+        if (_config.donSigner != address(0)) donSigner = _config.donSigner;
+    }
+
+
 
     /// @dev Routes CRE reports by prefix. Backend sends: prefix (1 byte) + abi.encode(...payload).
     ///      - 0x00: executeTrade → payload = abi.encode(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, maxCostUsdc, nonce, deadline, user, donSignature, userSignature)

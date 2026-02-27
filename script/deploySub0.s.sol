@@ -78,7 +78,15 @@ contract DeploySub0 is Script {
 
         address usdcAddress = getOrDeployUsdc(deployer);
 
-        PredictionVault predictionVault = new PredictionVault(usdcAddress, address(ctf), donSigner, creForwarder);
+        PredictionVault predictionVault = new PredictionVault(usdcAddress, address(ctf), donSigner, creForwarder, address(permissionManager));
+        // predictionVault.setConfig(PredictionVault.Config({
+        //     usdc: usdcAddress,
+        //     ctf: address(ctf),
+        //     backendSigner: donSigner,
+        //     donSigner: donSigner,
+        //     creForwarder: creForwarder,
+        //     permissionManager: address(permissionManager)
+        // }));
         console2.log("PredictionVault:", address(predictionVault));
 
         Sub0 sub0Impl = new Sub0();
@@ -103,8 +111,8 @@ contract DeploySub0 is Script {
         permissionManager.grantRole(GAME_CONTRACT_ROLE, address(sub0));
         ctf.grantRole(ctf.GAME_CONTRACT_ROLE(), address(sub0));
 
-        predictionVault.transferOwnership(address(sub0));
-        console2.log("PredictionVault owner set to Sub0 proxy");
+        // predictionVault.transferOwnership(address(sub0));
+        // console2.log("PredictionVault owner set to Sub0 proxy");
 
         hub.initializeGame("Sub0", address(sub0));
         hub.activateGame(address(sub0));
