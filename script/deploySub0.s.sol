@@ -79,7 +79,15 @@ contract DeploySub0 is Script {
 
         address usdcAddress = getOrDeployUsdc(deployer);
 
-        PredictionVault predictionVault = new PredictionVault(usdcAddress, address(ctf), donSigner, creForwarder);
+        PredictionVault predictionVault = new PredictionVault(usdcAddress, address(ctf), donSigner, creForwarder, address(permissionManager));
+        // predictionVault.setConfig(PredictionVault.Config({
+        //     usdc: usdcAddress,
+        //     ctf: address(ctf),
+        //     backendSigner: donSigner,
+        //     donSigner: donSigner,
+        //     creForwarder: creForwarder,
+        //     permissionManager: address(permissionManager)
+        // }));
         console2.log("PredictionVault:", address(predictionVault));
 
         Sub0 sub0Impl = new Sub0();

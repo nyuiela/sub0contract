@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IConditionalTokensV2} from "../conditional/IConditionalTokensV2.sol";
 import {IPredictionVault} from "../interfaces/IPredictionVault.sol";
 import {ReceiverTemplate} from "./ReceiverTemplate.sol";
+import {IPermissionManager} from "../interfaces/IPermissionManager.sol";
 
 /**
  * @title PredictionVault
@@ -29,7 +30,7 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
     error CREReportTooShort();
     error CREUnknownAction(uint8 prefix);
     error CRESeedLiquidityNotOwner();
-
+    error NotAuthorized(address account, bytes32 role);
     bytes32 public constant DON_QUOTE_TYPEHASH = keccak256(
         "DONQuote(bytes32 marketId,uint256 outcomeIndex,bool buy,uint256 quantity,uint256 tradeCostUsdc,address user,uint256 nonce,uint256 deadline)"
     );
@@ -37,27 +38,34 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
         "UserTrade(bytes32 marketId,uint256 outcomeIndex,bool buy,uint256 quantity,uint256 maxCostUsdc,uint256 nonce,uint256 deadline)"
     );
 
-    IERC20 public immutable usdc;
-    IConditionalTokensV2 public immutable ctf;
+    IERC20 public usdc;
+    IConditionalTokensV2 public ctf;
     address public override backendSigner;
     address public override donSigner;
-
+    IPermissionManager public permissionManager;
     uint256 public constant USDC_DECIMALS = 6;
 
     mapping(bytes32 => bytes32) private _questionConditionId;
     mapping(bytes32 => mapping(uint256 => bool)) public nonceUsed;
+    bytes32 public constant GAME_CONTRACT_ROLE = keccak256("GAME_CONTRACT_ROLE");
+    modifier onlyAuthorized(bytes32 role) {
+        if (!permissionManager.hasRole(GAME_CONTRACT_ROLE, msg.sender)) revert NotAuthorized(msg.sender, GAME_CONTRACT_ROLE);
+        _;
+    }
 
     constructor(
         address _usdc,
         address _ctf,
         address _backendSigner,
-        address _creForwarder
+        address _creForwarder,
+        address _permissionManager
     ) EIP712("Sub0PredictionVault", "1") ReceiverTemplate(msg.sender, _creForwarder)
      {
         usdc = IERC20(_usdc);
         ctf = IConditionalTokensV2(_ctf);
         backendSigner = _backendSigner;
         donSigner = _backendSigner;
+        permissionManager = IPermissionManager(_permissionManager);
     }
 
 
@@ -73,8 +81,7 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
         emit DonSignerSet(old, _donSigner);
     }
 
-    function registerMarket(bytes32 questionId, bytes32 conditionId) external override onlyOwner {
-        if (conditionId == bytes32(0)) revert InvalidOutcome();
+    function registerMarket(bytes32 questionId, bytes32 conditionId) external override onlyAuthorized(GAME_CONTRACT_ROLE) {
         if (_questionConditionId[questionId] != bytes32(0)) revert InvalidOutcome();
         _questionConditionId[questionId] = conditionId;
         emit MarketRegistered(questionId, conditionId);
@@ -293,6 +300,20 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
         emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
     }
 
+struct Config {
+    address permissionManager;
+    address usdc;
+    address ctf;
+    address backendSigner;
+    address donSigner;
+}
+    function setConfig(Config memory _config) external onlyOwner {
+        if (_config.permissionManager != address(0)) permissionManager = IPermissionManager(_config.permissionManager);
+        if (_config.usdc != address(0)) usdc = IERC20(_config.usdc);
+        if (_config.ctf != address(0)) ctf = IConditionalTokensV2(_config.ctf);
+        if (_config.backendSigner != address(0)) backendSigner = _config.backendSigner;
+        if (_config.donSigner != address(0)) donSigner = _config.donSigner;
+    }
 
 
 
