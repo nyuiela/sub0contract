@@ -10,7 +10,8 @@ etherscan_url := "https://api.etherscan.io/v2/api?chainid=11155111"
 deploy network="sepolia":
   @echo "Deploying Sub0 stack to {{network}}..."
   forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} --broadcast
+    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} --broadcast --verify --etherscan-api-key {{etherscan_api_key}} --chain {{network}} \
+    --via-ir --optimizer-runs 200
 
 # Install lib dependencies (submodules). Run after clone.
 deps:
@@ -107,14 +108,34 @@ set-cre-forwarder-config network="sepolia":
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
 
-# Verify on Etherscan (Sepolia). Sub0 is a proxy: verify IMPLEMENTATION address.
+# Verify on Etherscan (Etherscan API V2 required; V1 is deprecated).
+# Sub0 is a proxy: verify the IMPLEMENTATION address, not the proxy.
 # Get implementation: cast implementation <PROXY_ADDRESS> --rpc-url <RPC>
-# Then: just verify-sepolia <IMPLEMENTATION_ADDRESS>
+# Requires ETHERSCAN_API_KEY in .env (or export before running).
+#
+# Sepolia: just verify-sepolia <IMPLEMENTATION_ADDRESS>
+# Mainnet: just verify-mainnet <IMPLEMENTATION_ADDRESS>
+etherscan_sepolia_url := "https://api.etherscan.io/v2/api?chainid=11155111"
+etherscan_mainnet_url := "https://api.etherscan.io/v2/api?chainid=1"
+
 verify-sepolia impl_address:
-  @echo "Verifying Sub0 implementation on Sepolia..."
+  @echo "Verifying Sub0 implementation on Sepolia (Etherscan V2)..."
   forge verify-contract {{impl_address}} src/gamehub/Sub0.sol:Sub0 \
     --chain-id 11155111 \
     --verifier etherscan \
+    --verifier-url {{etherscan_sepolia_url}} \
     --etherscan-api-key $ETHERSCAN_API_KEY \
     --rpc-url {{rpc_sepolia}} \
+    --via-ir --num-of-optimizations 200 \
+    --watch
+
+verify-mainnet impl_address:
+  @echo "Verifying Sub0 implementation on mainnet (Etherscan V2)..."
+  forge verify-contract {{impl_address}} src/gamehub/Sub0.sol:Sub0 \
+    --chain-id 1 \
+    --verifier etherscan \
+    --verifier-url {{etherscan_mainnet_url}} \
+    --etherscan-api-key $ETHERSCAN_API_KEY \
+    --rpc-url https://eth.llamarpc.com \
+    --via-ir --num-of-optimizations 200 \
     --watch

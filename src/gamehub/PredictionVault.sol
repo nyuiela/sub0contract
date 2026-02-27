@@ -93,7 +93,6 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
     }
 
     function _seedMarketLiquidityInternal(bytes32 questionId, uint256 amountUsdc) internal nonReentrant {
-        if (owner() != msg.sender) revert CRESeedLiquidityNotOwner();
         bytes32 conditionId = _questionConditionId[questionId];
         if (conditionId == bytes32(0)) revert MarketNotRegistered();
 
@@ -182,7 +181,67 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
      *      BUY: tradeCostUsdc <= maxCostUsdc; USDC from user to vault; CTF from vault to user.
      *      SELL: tradeCostUsdc >= maxCostUsdc (min receive); CTF from user to vault; USDC from vault to user.
      */
-    function executeTrade(
+  //  function executeTrades(
+  //       bytes32 questionId,
+  //       uint256 outcomeIndex,
+  //       bool[] calldata buys,
+  //       uint256[] calldata quantities,
+  //       uint256[] calldata tradeCostUsdc,
+  //       uint256[] calldata maxCostUsdc,
+  //       uint256 nonce,
+  //       uint256 deadline,
+  //       address[] calldata users,
+  //       bytes calldata donSignature,
+  //       bytes[] calldata userSignatures
+  //   ) external override nonReentrant {
+  //     // require(buys)
+  //       if (block.timestamp > deadline) revert ExpiredQuote();
+  //       if (nonceUsed[questionId][nonce]) revert NonceAlreadyUsed();
+
+  //       bytes32 conditionId = _questionConditionId[questionId];
+  //       if (conditionId == bytes32(0)) revert MarketNotRegistered();
+
+  //       for (uint256 i = 0; i < buys.length; i++) {
+  //         bool buy = buys[i];
+  //         uint256 quantity = quantities[i];
+  //         uint256 _tradeCostUsdc = tradeCostUsdc[i];
+  //         uint256 _maxCostUsdc = maxCostUsdc[i];
+  //         address user = users[i];
+  //         bytes memory userSignature = userSignatures[i];
+  //       uint256 outcomeSlotCount = ctf.getOutcomeSlotCount(conditionId);
+  //       if (outcomeIndex >= outcomeSlotCount) revert InvalidOutcome();
+
+  //       if (ECDSA.recover(_hashDonQuote(questionId, outcomeIndex, buy, quantity, _tradeCostUsdc, user, nonce, deadline), donSignature) != donSigner) {
+  //           revert InvalidDonSignature();
+  //       }
+  //       if (ECDSA.recover(_hashUserTrade(questionId, outcomeIndex, buy, quantity, _maxCostUsdc, nonce, deadline), userSignature) != user) {
+  //           revert InvalidUserSignature();
+  //       }
+
+  //       if (buy) {
+  //           if (_tradeCostUsdc > _maxCostUsdc) revert SlippageExceeded();
+  //       } else {
+  //           if (_tradeCostUsdc < _maxCostUsdc) revert SlippageExceeded();
+  //       }
+  //       }
+
+
+  //       uint256 positionId = _getPositionId(conditionId, outcomeIndex);
+
+  //       if (buys[0]) {
+  //           if (ctf.balanceOf(users[1], positionId) < quantities[1]) revert InsufficientVaultBalance();
+  //           if (tradeCostUsdc[0] > 0 && !usdc.transferFrom(users[0], users[1], tradeCostUsdc[1])) revert TransferFailed();
+  //           ctf.safeTransferFrom(users[1], users[0], positionId, quantities[1], "");
+  //       } else {
+  //           if (usdc.balanceOf(users[1]) < tradeCostUsdc[0]) revert InsufficientUsdcSolvency();
+  //           ctf.safeTransferFrom(users[0], users[1], positionId, quantities[0], "");
+  //           if (tradeCostUsdc[0] > 0 && !usdc.transfer(users[1], tradeCostUsdc[0])) revert TransferFailed();
+  //       }
+
+  //       nonceUsed[questionId][nonce] = true;
+  //       // emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
+  //   }
+        function executeTrade(
         bytes32 questionId,
         uint256 outcomeIndex,
         bool buy,
@@ -233,6 +292,9 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
 
         emit TradeExecuted(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, user);
     }
+
+
+
 
     /// @dev Routes CRE reports by prefix. Backend sends: prefix (1 byte) + abi.encode(...payload).
     ///      - 0x00: executeTrade → payload = abi.encode(questionId, outcomeIndex, buy, quantity, tradeCostUsdc, maxCostUsdc, nonce, deadline, user, donSignature, userSignature)

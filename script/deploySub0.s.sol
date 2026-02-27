@@ -104,8 +104,8 @@ contract DeploySub0 is Script {
         permissionManager.grantRole(GAME_CONTRACT_ROLE, address(sub0));
         ctf.grantRole(ctf.GAME_CONTRACT_ROLE(), address(sub0));
 
-        predictionVault.transferOwnership(address(sub0));
-        console2.log("PredictionVault owner set to Sub0 proxy");
+        // predictionVault.transferOwnership(address(sub0));
+        // console2.log("PredictionVault owner set to Sub0 proxy");
 
         hub.initializeGame("Sub0", address(sub0));
         hub.activateGame(address(sub0));
