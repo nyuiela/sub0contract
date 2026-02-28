@@ -95,7 +95,7 @@ contract PredictionVault is IPredictionVault, ReceiverTemplate, EIP712, Reentran
      * @dev Seed initial liquidity: platform sends USDC to vault; vault splits into full outcome set (CTF).
      *      Uses msg.sender for onlyOwner and transferFrom (so CRE forwarder must be owner and approve USDC).
      */
-    function seedMarketLiquidity(bytes32 questionId, uint256 amountUsdc) external override onlyOwner nonReentrant {
+    function seedMarketLiquidity(bytes32 questionId, uint256 amountUsdc) external override onlyOwner {
         _seedMarketLiquidityInternal(questionId, amountUsdc);
     }
 

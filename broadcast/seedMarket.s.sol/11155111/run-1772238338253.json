@@ -1,0 +1,57 @@
+{
+  "transactions": [
+    {
+      "hash": "0x59da5c68247c5570e012f273ab177c90624c22523e3c30d69c266d83e52bafd3",
+      "transactionType": "CALL",
+      "contractName": "TestERC20",
+      "contractAddress": "0xef536e7dc524566635ae50e891bfc44d6619a1ff",
+      "function": "approve(address,uint256)",
+      "arguments": [
+        "0xFC4DEF105b3288E41f0aE8818bDD48d58F950772",
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+      ],
+      "transaction": {
+        "from": "0xf0830060f836b8d54bf02049e5905f619487989e",
+        "to": "0xef536e7dc524566635ae50e891bfc44d6619a1ff",
+        "gas": "0xf9bf",
+        "value": "0x0",
+        "input": "0x095ea7b3000000000000000000000000fc4def105b3288e41f0ae8818bdd48d58f950772ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "nonce": "0x96f",
+        "chainId": "0xaa36a7"
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    },
+    {
+      "hash": null,
+      "transactionType": "CALL",
+      "contractName": "PredictionVault",
+      "contractAddress": "0xfc4def105b3288e41f0ae8818bdd48d58f950772",
+      "function": "seedMarketLiquidity(bytes32,uint256)",
+      "arguments": [
+        "0xdf68741f54e049b0a3c5aa8f45c02b0eb841587ceb02b660812374002c7e16cd",
+        "1000000"
+      ],
+      "transaction": {
+        "from": "0xf0830060f836b8d54bf02049e5905f619487989e",
+        "to": "0xfc4def105b3288e41f0ae8818bdd48d58f950772",
+        "gas": "0x324db",
+        "value": "0x0",
+        "input": "0x765ee7dddf68741f54e049b0a3c5aa8f45c02b0eb841587ceb02b660812374002c7e16cd00000000000000000000000000000000000000000000000000000000000f4240",
+        "nonce": "0x970",
+        "chainId": "0xaa36a7"
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [
+    "0x59da5c68247c5570e012f273ab177c90624c22523e3c30d69c266d83e52bafd3"
+  ],
+  "returns": {},
+  "timestamp": 1772238338253,
+  "chain": 11155111,
+  "commit": "f844a23"
+}

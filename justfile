@@ -36,6 +36,12 @@ create-market network="sepolia":
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
 
+seed-market network="sepolia":
+  @echo "Seeding market liquidity on PredictionVault ({{network}})..."
+  forge script script/seedMarket.s.sol:SeedMarket -vvvv \
+    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
+    --broadcast
+
 create-bet network="sepolia":
   @echo "Creating bet on {{network}}..."
   infisical run --path="/sub0contract" -- forge script script/createBet.s.sol:CreateBet -vvvv \
