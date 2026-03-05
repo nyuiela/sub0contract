@@ -352,8 +352,8 @@ contract Vault is IVault, Initializable, UUPSUpgradeable, IERC1155Receiver {
 
         for (uint256 i = 0; i < outcomeCount;) {
             uint256 indexSet = 1 << i;
-            bytes32 _collectionId = CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
-            // Note: positionId calculation kept for potential future use (_collectionId)
+            CTHelpersV2.getCollectionId(bytes32(0), conditionId, indexSet);
+            // Note: collectionId/positionId available if needed for balance lookup
             // uint256 positionId = CTHelpersV2.getPositionId(IERC20(token), collectionId);
 
             // Sum all balances for this position ID (across all users)

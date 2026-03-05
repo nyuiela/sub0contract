@@ -65,6 +65,7 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgra
     mapping(address => uint256) public redeemNonce;
 
     struct Config {
+        address owner;
         address hub;
         address vault;
         address tokenManager;
@@ -144,7 +145,8 @@ contract Sub0 is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgra
         if (_config.vault == address(0)) revert ZeroAddress();
         if (_config.permissionManager == address(0)) revert ZeroAddress();
         if (_config.hub == address(0)) revert ZeroAddress();
-        __Ownable_init(msg.sender);
+        address initialOwner = _config.owner != address(0) ? _config.owner : msg.sender;
+        __Ownable_init(initialOwner);
         __EIP712_init("Sub0", "1");
         __ReceiverTemplate_init(_config.creForwarder);
         tokenManager = ITokensManager(_config.tokenManager);

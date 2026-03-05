@@ -1,147 +1,128 @@
+# Sub0 prediction market – one justfile for Sepolia and Tenderly
+# Load .env (PRIVATE_KEY, USDC_ADDRESS, CRE forwarder, RPC URLs). See env-check.
 set dotenv-load
 
-# Sub0 prediction market – Just recipes
-# Lib deps: use submodules only. After clone run: git submodule update --init --recursive
+# Chain IDs
+SEPOLIA_CHAIN_ID := "11155111"
+TENDERLY_CHAIN_ID := "9998453"
 
-rpc_sepolia := "https://ethereum-sepolia-public.nodies.app"
-etherscan_api_key := "KZUFSFGHCEXRX2RITQI1PHX9SYEV6PGDQG"
-etherscan_url := "https://api.etherscan.io/v2/api?chainid=11155111"
+# Default: show available commands
+default:
+    @just --list
 
-deploy network="sepolia":
-  @echo "Deploying Sub0 stack to {{network}}..."
-  forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} --broadcast --verify --etherscan-api-key {{etherscan_api_key}} --chain {{network}} \
-    --via-ir --optimizer-runs 200
-
-# Install lib dependencies (submodules). Run after clone.
-deps:
-  git submodule update --init --recursive
+# ---- Build & test (from forwarder-contract) ----
+build:
+    forge build
 
 test:
-  @echo "Running tests..."
-  forge test -vvvv
+    forge test
 
-generate-question-id:
-  @echo "Generating questionId = keccak256(question, creator, oracle)..."
-  infisical run --path="/sub0contract" -- forge script script/generateQuestionId.s.sol:GenerateQuestionId -vvvv
+clean:
+    forge clean
 
-get-market network="sepolia":
-  @echo "Fetching market by questionId on {{network}}..."
-  forge script script/getMarket.s.sol:GetMarket -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }}
+deps:
+    git submodule update --init --recursive
 
-create-market network="sepolia":
-  @echo "Creating market on {{network}}..."
-  forge script script/createMarket.s.sol:CreateMarket -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# ---- Sepolia deployment ----
+# Requires in .env: PRIVATE_KEY, SEPOLIA_RPC_URL (e.g. https://rpc.sepolia.org or Alchemy/Infura), optional: USDC_ADDRESS, DON_SIGNER_ADDRESS, CRE_FORWARDER_ADDRESS
+deploy-sepolia:
+    @echo "Deploying Sub0 stack to Sepolia..."
+    forge script script/deploySub0.s.sol:DeploySub0 \
+        --rpc-url $SEPOLIA_RPC_URL \
+        --private-key $PRIVATE_KEY \
+        --broadcast \
+        --chain-id {{SEPOLIA_CHAIN_ID}} \
+        --optimizer-runs 200
 
-seed-market network="sepolia":
-  @echo "Seeding market liquidity on PredictionVault ({{network}})..."
-  forge script script/seedMarket.s.sol:SeedMarket -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# ---- Tenderly deployment ----
+# Set CHAIN_ID=9998453 so the script uses TENDERLY_CRE_FORWARDER_ADDRESS and TENDERLY_USDC_ADDRESS (not Sepolia addresses).
+# Requires: PRIVATE_KEY, TENDERLY_SUB0_RPC_URL, TENDERLY_CRE_FORWARDER_ADDRESS. Optional: TENDERLY_USDC_ADDRESS (or run just deploy-mock-usdc-tenderly first and set it).
+deploy-tenderly:
+    @echo "Deploying Sub0 stack to Tenderly Sub0 chain..."
+    CHAIN_ID=9998453 forge script script/deploySub0.s.sol:DeploySub0 \
+        --rpc-url $TENDERLY_SUB0_RPC_URL \
+        --private-key $PRIVATE_KEY \
+        --broadcast \
+        --chain-id {{TENDERLY_CHAIN_ID}} \
+        --optimizer-runs 1
 
-create-bet network="sepolia":
-  @echo "Creating bet on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/createBet.s.sol:CreateBet -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    # --broadcast
+deploy-tenderly-complete: deploy-tenderly
+    @echo "Tenderly deployment complete."
 
-stake network="sepolia":
-  @echo "Staking on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/stake.s.sol:Stake -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Deploy then verify all contracts from the broadcast file. Run after a successful deploy (or redeploy then verify in one go).
+deploy-tenderly-verify: deploy-tenderly
+    chmod +x scripts/verify-tenderly-from-broadcast.sh
+    ./scripts/verify-tenderly-from-broadcast.sh
 
-redeem network="sepolia":
-  @echo "Redeeming on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/redeem.s.sol:Redeem -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Verify contracts from last broadcast only (no deploy). Use after deploy-tenderly if you skipped verify.
+verify-tenderly-from-broadcast:
+    chmod +x scripts/verify-tenderly-from-broadcast.sh
+    ./scripts/verify-tenderly-from-broadcast.sh
 
-execute-trade network="sepolia":
-  @echo "Executing trade (relayer) on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/executeTrade.s.sol:ExecuteTrade -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Verify mock USDC (TestERC20) on Tenderly. Example: just verify-usdc-tenderly 0x7FEC6e2A596b8227ABc04967B7D1F8D8EDD244f7
+verify-usdc-tenderly address:
+    forge verify-contract {{address}} src/mocks/TestERC20.sol:TestERC20 \
+        --chain-id {{TENDERLY_CHAIN_ID}} \
+        --verifier-url $TENDERLY_VERIFIER_URL \
+        --verifier custom \
+        --optimizer-runs 1
 
-settle-market network="sepolia":
-  @echo "Settling market (oracle resolve) on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/settleMarket.s.sol:SettleMarket -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Deploy mock USDC (TestERC20) on Tenderly only. Then set TENDERLY_USDC_ADDRESS in .env to the printed address and run just deploy-tenderly.
+deploy-mock-usdc-tenderly:
+    @echo "Deploying mock USDC (TestERC20) on Tenderly..."
+    forge script script/deployMockUsdc.s.sol:DeployMockUsdc \
+        --rpc-url $TENDERLY_SUB0_RPC_URL \
+        --private-key $PRIVATE_KEY \
+        --broadcast \
+        --chain-id {{TENDERLY_CHAIN_ID}} \
+        --optimizer-runs 1
 
-approve-vault network="sepolia":
-  @echo "Approving vault (CTF) on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/approveVault.s.sol:ApproveVault -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Verify contract on Tenderly (run after deploy; not part of deploy).
+# Example: just verify-tenderly 0xbbd7db97abb71Fb351b7c6Dbc04692F6d9aFfA96  (Sub0 impl)
+# Or: just verify-tenderly <address> "src/gamehub/PredictionVault.sol:PredictionVault"
+verify-tenderly address contract="src/gamehub/Sub0.sol:Sub0":
+    forge verify-contract {{address}} {{contract}} \
+        --chain-id {{TENDERLY_CHAIN_ID}} \
+        --verifier-url $TENDERLY_VERIFIER_URL \
+        --verifier custom
 
-allowlist-token network="sepolia":
-  @echo "Allowlisting token on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/allowListToken.s.sol:AllowListToken -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# Verify contract on Sepolia (Etherscan)
+verify-sepolia address:
+    forge verify-contract {{address}} \
+        --chain-id {{SEPOLIA_CHAIN_ID}} \
+        --verifier-url https://api-sepolia.etherscan.io/api \
+        --verifier etherscan \
+        --etherscan-api-key $ETHERSCAN_API_KEY
 
-setup-permissions network="sepolia":
-  @echo "Setting up permissions on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/setupPermissions.s.sol:SetupPermissions -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# ---- Environment checks ----
+env-check:
+    @echo "Sub0 contract – env (set in .env):"
+    @echo "  Common: PRIVATE_KEY (required for deploy)"
+    @echo "  Sepolia: SEPOLIA_RPC_URL, ETHERSCAN_API_KEY (for verify-sepolia), USDC_ADDRESS, CRE_FORWARDER_ADDRESS"
+    @echo "  Tenderly: TENDERLY_SUB0_RPC_URL, TENDERLY_CRE_FORWARDER_ADDRESS, TENDERLY_USDC_ADDRESS (or run just deploy-mock-usdc-tenderly first)"
+    @echo "  Tenderly verify: TENDERLY_VERIFIER_URL (for just verify-tenderly <address> after deploy)"
+    @echo "  Optional: DON_SIGNER_ADDRESS, BACKEND_SIGNER_ADDRESS"
+    @echo ""
+    @echo "Current:"
+    @[ -n "$$PRIVATE_KEY" ] && echo "  PRIVATE_KEY: set" || echo "  PRIVATE_KEY: not set"
+    @[ -n "$$SEPOLIA_RPC_URL" ] && echo "  SEPOLIA_RPC_URL: set" || echo "  SEPOLIA_RPC_URL: not set"
+    @[ -n "$$TENDERLY_SUB0_RPC_URL" ] && echo "  TENDERLY_SUB0_RPC_URL: set" || echo "  TENDERLY_SUB0_RPC_URL: not set"
+    @[ -n "$$TENDERLY_VERIFIER_URL" ] && echo "  TENDERLY_VERIFIER_URL: set" || echo "  TENDERLY_VERIFIER_URL: not set"
 
-set-token-uri network="sepolia":
-  @echo "Setting token URI (ConditionalTokensV2) on {{network}}..."
-  infisical run --path="/sub0contract" -- forge script script/setTokenURI.s.sol:SetTokenURI -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+env-check-tenderly:
+    @echo "Tenderly Sub0 Environment:"
+    @echo "RPC URL: $TENDERLY_SUB0_RPC_URL"
+    @echo "Verifier URL: $TENDERLY_VERIFIER_URL"
+    @echo "CRE Forwarder: $TENDERLY_CRE_FORWARDER_ADDRESS"
+    @echo "USDC (Tenderly): $TENDERLY_USDC_ADDRESS"
+    @echo "USDC (generic): $USDC_ADDRESS"
 
-allowlist-reporter network="sepolia":
-  @echo "Allowlisting oracle reporter on {{network}}..."
-  forge script script/allowListReporter.s.sol:AllowListReporter -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+# ---- Deployment artifacts ----
+save-deployment:
+    ./save-deployment-info.sh
 
-upgrade-sub0 network="sepolia":
-  @echo "Upgrading Sub0 on {{network}}..."
-  forge script script/upgradeSub0.s.sol:UpgradeSub0 -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
+extract-abis:
+    ./extract-abis.sh
 
-set-cre-forwarder-config network="sepolia":
-  @echo "Setting CRE forwarder config on Sub0 (forwarder, author, workflow name, workflow ID)..."
-  forge script script/setCreForwarderConfig.s.sol:SetCreForwarderConfig -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} \
-    --broadcast
-
-# Verify on Etherscan (Etherscan API V2 required; V1 is deprecated).
-# Sub0 is a proxy: verify the IMPLEMENTATION address, not the proxy.
-# Get implementation: cast implementation <PROXY_ADDRESS> --rpc-url <RPC>
-# Requires ETHERSCAN_API_KEY in .env (or export before running).
-#
-# Sepolia: just verify-sepolia <IMPLEMENTATION_ADDRESS>
-# Mainnet: just verify-mainnet <IMPLEMENTATION_ADDRESS>
-etherscan_sepolia_url := "https://api.etherscan.io/v2/api?chainid=11155111"
-etherscan_mainnet_url := "https://api.etherscan.io/v2/api?chainid=1"
-
-verify-sepolia impl_address:
-  @echo "Verifying Sub0 implementation on Sepolia (Etherscan V2)..."
-  forge verify-contract {{impl_address}} src/gamehub/Sub0.sol:Sub0 \
-    --chain-id 11155111 \
-    --verifier etherscan \
-    --verifier-url {{etherscan_sepolia_url}} \
-    --etherscan-api-key $ETHERSCAN_API_KEY \
-    --rpc-url {{rpc_sepolia}} \
-    --via-ir --num-of-optimizations 200 \
-    --watch
-
-verify-mainnet impl_address:
-  @echo "Verifying Sub0 implementation on mainnet (Etherscan V2)..."
-  forge verify-contract {{impl_address}} src/gamehub/Sub0.sol:Sub0 \
-    --chain-id 1 \
-    --verifier etherscan \
-    --verifier-url {{etherscan_mainnet_url}} \
-    --etherscan-api-key $ETHERSCAN_API_KEY \
-    --rpc-url https://eth.llamarpc.com \
-    --via-ir --num-of-optimizations 200 \
-    --watch
+update-contracts:
+    ./update-contracts-json.sh

@@ -103,6 +103,7 @@ contract HubTest is Test {
         // Deploy first Sub0 game
         Sub0 sub0Impl = new Sub0();
         Sub0.Config memory sub0Config = Sub0.Config({
+            owner: address(this),
             hub: address(hub),
             vault: address(vault),
             tokenManager: address(tokensManager),

@@ -22,12 +22,17 @@ import {TestERC20} from "../src/mocks/TestERC20.sol";
  *
  * Environment Variables:
  * - PRIVATE_KEY: Deployer private key (required)
- * - USDC_ADDRESS: USDC for PredictionVault (optional; deploys TestERC20 if not set)
- * - DON_SIGNER_ADDRESS: DON signer for CRE quote signatures (used for PredictionVault; fallback: BACKEND_SIGNER_ADDRESS, then deployer)
+ * - CHAIN_ID: Set to 9998453 for Tenderly so TENDERLY_* vars are used (set by justfile for deploy-tenderly)
+ * - USDC_ADDRESS: USDC for PredictionVault (Sepolia/main; optional; deploys TestERC20 if not set)
+ * - TENDERLY_USDC_ADDRESS: USDC for Tenderly (when CHAIN_ID=9998453). Use 0x8bb2db64840bfddf257487efef884b2fa24e32ea or deploy mock first: just deploy-mock-usdc-tenderly
+ * - DON_SIGNER_ADDRESS: DON signer for CRE quote signatures (fallback: BACKEND_SIGNER_ADDRESS, then deployer)
  * - BACKEND_SIGNER_ADDRESS: Legacy fallback if DON_SIGNER_ADDRESS not set
- * - CRE_FORWARDER_ADDRESS: Chainlink CRE forwarder allowed to call onReport (optional; default: deployer; set to real forwarder for production)
+ * - CRE_FORWARDER_ADDRESS: CRE forwarder for Sepolia/main (optional; default: deployer)
+ * - TENDERLY_CRE_FORWARDER_ADDRESS: CRE forwarder for Tenderly (when CHAIN_ID=9998453; required for correct onReport caller)
  */
 contract DeploySub0 is Script {
+    uint256 internal constant TENDERLY_CHAIN_ID = 9998453;
+
     bytes32 public constant TOKEN_MANAGER_ROLE = keccak256("TOKEN_MANAGER_ROLE");
     bytes32 public constant ORACLE_MANAGER_ROLE = keccak256("ORACLE_MANAGER_ROLE");
     bytes32 public constant DEFAULT_ADMIN_ROLE = keccak256("DEFAULT_ADMIN_ROLE");
@@ -37,12 +42,19 @@ contract DeploySub0 is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
+        uint256 chainId = vm.envOr("CHAIN_ID", uint256(0));
+        bool isTenderly = (chainId == TENDERLY_CHAIN_ID);
+
         address donSigner = vm.envOr("DON_SIGNER_ADDRESS", vm.envOr("BACKEND_SIGNER_ADDRESS", deployer));
-        address creForwarder = vm.envOr("CRE_FORWARDER_ADDRESS", deployer);
+        address creForwarder = isTenderly
+            ? vm.envOr("TENDERLY_CRE_FORWARDER_ADDRESS", deployer)
+            : vm.envOr("CRE_FORWARDER_ADDRESS", deployer);
 
         console2.log("=== Sub0 Deployment ===");
         console2.log("Deployer:", deployer);
+        console2.log("Chain ID:", chainId);
         console2.log("DON signer (CRE quotes):", donSigner);
+        console2.log("CRE forwarder:", creForwarder);
         console2.log("");
 
         vm.startBroadcast(deployerKey);
@@ -77,7 +89,7 @@ contract DeploySub0 is Script {
         vault.setConditionalTokens(address(ctf));
         console2.log("Vault (VaultV2):", address(vault));
 
-        address usdcAddress = getOrDeployUsdc(deployer);
+        address usdcAddress = getOrDeployUsdc(deployer, isTenderly);
 
         PredictionVault predictionVault = new PredictionVault(usdcAddress, address(ctf), donSigner, creForwarder, address(permissionManager));
         // predictionVault.setConfig(PredictionVault.Config({
@@ -92,6 +104,7 @@ contract DeploySub0 is Script {
 
         Sub0 sub0Impl = new Sub0();
         Sub0.Config memory sub0Config = Sub0.Config({
+            owner: deployer,
             hub: address(hub),
             vault: address(vault),
             tokenManager: address(tokensManager),
@@ -131,7 +144,12 @@ contract DeploySub0 is Script {
         console2.log("USDC/collateral:", usdcAddress);
     }
 
-    function getOrDeployUsdc(address deployer) internal returns (address) {
+    function getOrDeployUsdc(address deployer, bool isTenderly) internal returns (address) {
+        if (isTenderly && vm.envExists("TENDERLY_USDC_ADDRESS")) {
+            address addr = vm.envAddress("TENDERLY_USDC_ADDRESS");
+            console2.log("Using TENDERLY_USDC_ADDRESS at:", addr);
+            return addr;
+        }
         if (vm.envExists("USDC_ADDRESS")) {
             address addr = vm.envAddress("USDC_ADDRESS");
             console2.log("Using USDC at:", addr);
