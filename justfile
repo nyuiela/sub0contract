@@ -3,7 +3,8 @@ set dotenv-load
 # Sub0 prediction market – Just recipes
 # Lib deps: use submodules only. After clone run: git submodule update --init --recursive
 
-rpc_sepolia := "https://ethereum-sepolia-public.nodies.app"
+# rpc_sepolia := "https://ethereum-sepolia-public.nodies.app"
+rpc_sepolia := "https://virtual.rpc.tenderly.co/kaleel/project/public/sub0"
 etherscan_api_key := "KZUFSFGHCEXRX2RITQI1PHX9SYEV6PGDQG"
 etherscan_url := "https://api.etherscan.io/v2/api?chainid=11155111"
 

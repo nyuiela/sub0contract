@@ -6,19 +6,17 @@ import {IReceiver} from "../interfaces/IReceiver.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title ReceiverTemplate - Abstract receiver with optional permission controls
-/// @notice Provides flexible, updatable security checks for receiving workflow reports
+/// @notice Includes prevault check before processing the reports
 /// @dev The forwarder address is required at construction time for security.
-///      Additional permission fields can be configured using setter functions.
 abstract contract ReceiverTemplate is IReceiver, Ownable {
-  // Required permission field at deployment, configurable after
+  // Required forwarder address at deployment, configurable after
   address private s_forwarderAddress; // If set, only this address can call onReport
 
-  // Optional permission fields (all default to zero = disabled)
-  address private s_expectedAuthor; // If set, only reports from this workflow owner are accepted
-  bytes10 private s_expectedWorkflowName; // Only validated when s_expectedAuthor is also set
-  bytes32 private s_expectedWorkflowId; // If set, only reports from this specific workflow ID are accepted
+  // Optional expected author address, workflow name, and workflow ID (all default to zero = disabled)
+  address private s_expectedAuthor;
+  bytes10 private s_expectedWorkflowName;
+  bytes32 private s_expectedWorkflowId;
 
-/// @dev Replaces the constructor for UUPS Proxy compatibility
     constructor(address _owner, address _forwarderAddress) Ownable(_owner) {
         if (_forwarderAddress == address(0)) {
             revert InvalidForwarderAddress();
@@ -26,11 +24,6 @@ abstract contract ReceiverTemplate is IReceiver, Ownable {
         s_forwarderAddress = _forwarderAddress;
         emit ForwarderAddressUpdated(address(0), _forwarderAddress);
     }
-
-// function initialize(address _owner, address _forwarderAddress) external initializer {
-//   __Ownable_init(_owner);
-//   s_forwarderAddress = _forwarderAddress;
-// }
 
   // Hex character lookup table for bytes-to-hex conversion
   bytes private constant HEX_CHARS = "0123456789abcdef";
@@ -96,16 +89,7 @@ abstract contract ReceiverTemplate is IReceiver, Ownable {
       if (s_expectedAuthor != address(0) && workflowOwner != s_expectedAuthor) {
         revert InvalidAuthor(workflowOwner, s_expectedAuthor);
       }
-
-      // ================================================================
-      // WORKFLOW NAME VALIDATION - REQUIRES AUTHOR VALIDATION
-      // ================================================================
-      // Do not rely on workflow name validation alone. Workflow names are unique
-      // per owner, but not across owners.
-      // Furthermore, workflow names use 40-bit truncation (bytes10), making collisions possible.
-      // Therefore, workflow name validation REQUIRES author (workflow owner) validation.
-      // The code enforces this dependency at runtime.
-      // ================================================================
+      
       if (s_expectedWorkflowName != bytes10(0)) {
         // Author must be configured if workflow name is used
         if (s_expectedAuthor == address(0)) {
