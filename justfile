@@ -4,15 +4,25 @@ set dotenv-load
 # Lib deps: use submodules only. After clone run: git submodule update --init --recursive
 
 # rpc_sepolia := "https://ethereum-sepolia-public.nodies.app"
-rpc_sepolia := "https://virtual.rpc.tenderly.co/kaleel/project/public/sub0"
-etherscan_api_key := "KZUFSFGHCEXRX2RITQI1PHX9SYEV6PGDQG"
-etherscan_url := "https://api.etherscan.io/v2/api?chainid=11155111"
+rpc_sepolia        := "https://virtual.rpc.tenderly.co/kaleel/project/public/sub0"
+rpc_celo_sepolia   := "https://forno.celo-sepolia.celo-testnet.org"
+etherscan_api_key  := ""
+celoscan_api_key   := ""
+etherscan_url      := "https://api.etherscan.io/v2/api?chainid=11155111"
+celoscan_url       := "https://sepolia.celoscan.io"
 
+# Deploy contracts (broadcast only — no verification).
+# Verify separately with: just verify-sepolia <impl> or just verify-celo <impl>
 deploy network="sepolia":
   @echo "Deploying Sub0 stack to {{network}}..."
   forge script script/deploySub0.s.sol:DeploySub0 -vvvv \
-    --rpc-url {{if network == "sepolia" { rpc_sepolia } else { "http://localhost:8545" } }} --broadcast --verify --etherscan-api-key {{etherscan_api_key}} --chain {{network}} \
+    --rpc-url {{if network == "sepolia" { rpc_sepolia } else if network == "celo-sepolia" { rpc_celo_sepolia } else { "http://localhost:8545" } }} \
+    --broadcast \
     --via-ir --optimizer-runs 200
+
+# Shorthand: deploy to Celo Sepolia testnet
+deploy-celo:
+  just deploy celo-sepolia
 
 # Install lib dependencies (submodules). Run after clone.
 deps:
@@ -144,5 +154,18 @@ verify-mainnet impl_address:
     --verifier-url {{etherscan_mainnet_url}} \
     --etherscan-api-key $ETHERSCAN_API_KEY \
     --rpc-url https://eth.llamarpc.com \
+    --via-ir --num-of-optimizations 200 \
+    --watch
+
+# Verify a contract on Celo Sepolia (Celoscan)
+# Requires CELOSCAN_API_KEY in .env
+verify-celo impl_address contract_path="src/gamehub/Sub0.sol:Sub0":
+  @echo "Verifying {{contract_path}} on Celo Sepolia (Celoscan)..."
+  forge verify-contract {{impl_address}} {{contract_path}} \
+    --chain-id 11142220 \
+    --verifier etherscan \
+    --verifier-url {{celoscan_url}} \
+    --etherscan-api-key $CELOSCAN_API_KEY \
+    --rpc-url {{rpc_celo_sepolia}} \
     --via-ir --num-of-optimizations 200 \
     --watch

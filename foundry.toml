@@ -23,4 +23,13 @@ fs_permissions = [
 # [profile.default.env]
 # baseSepolia="${BASE_SEPOLIA_RPC_URL}"
 
+# Celo Sepolia testnet (chain ID 11142220)
+# Uses EIP-1559 with a minimum base fee; foundry needs --legacy flag or the network
+# section below to handle the non-standard fee market gracefully.
+[rpc_endpoints]
+celo-sepolia = "https://forno.celo-sepolia.celo-testnet.org/"
+
+[etherscan]
+celo-sepolia = { key = "${CELOSCAN_API_KEY}", url = "https://sepolia.celoscan.io/api", chain = 11142220 }
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
