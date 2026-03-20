@@ -145,6 +145,50 @@ set-cre-forwarder-config network="sepolia":
     --rpc-url {{if network == "sepolia" { rpc_sepolia } else if network == "celo-sepolia" { rpc_celo_sepolia } else { "http://localhost:8545" } }} \
     --broadcast
 
+# ── ENS Resolver (Sub0ENSResolver.sol — one-time deploy per network) ─────────
+# The resolver is deployed once; ENS name registration is done separately
+# via app.ens.domains after getting the deployed contract address.
+#
+# Optional env vars (add to .env or export before running):
+#   GATEWAY_URL          - backend URL, e.g. https://api.sub0.app/api/ens/resolve
+#                          defaults to a placeholder that you update after deployment
+#   ENS_SIGNER_ADDRESS   - address whose ECDSA sig validates resolved names
+#                          defaults to BACKEND_SIGNER_ADDRESS (already in .env)
+
+deploy-ens-resolver network="sepolia":
+  #!/usr/bin/env bash
+  set -e
+  echo "Deploying Sub0ENSResolver to {{network}}..."
+  GW="${GATEWAY_URL:-https://sub0server.onrender.com/api/ens/resolve}"
+  SIGNER="${ENS_SIGNER_ADDRESS:-$BACKEND_SIGNER_ADDRESS}"
+  echo "  Gateway URL   : $GW"
+  echo "  Signer address: $SIGNER"
+  forge create src/manager/Sub0ENSResolver.sol:Sub0ENSResolver \
+    --rpc-url "{{if network == "sepolia" { rpc_sepolia } else if network == "celo-sepolia" { rpc_celo_sepolia } else { "http://localhost:8545" } }}" \
+    --private-key "$PRIVATE_KEY" \
+    --constructor-args "$GW" "$SIGNER" \
+    --broadcast
+
+# Deploy to actual public Sepolia (use when ready to register sub0.eth on real ENS).
+# Set REAL_SEPOLIA_RPC_URL in .env or export it before running.
+deploy-ens-resolver-real-sepolia:
+  #!/usr/bin/env bash
+  set -e
+  RPC="${REAL_SEPOLIA_RPC_URL:-https://rpc.sepolia.org}"
+  GW="${GATEWAY_URL:-https://sub0server.onrender.com/api/ens/resolve}"
+  SIGNER="${ENS_SIGNER_ADDRESS:-$BACKEND_SIGNER_ADDRESS}"
+  echo "Deploying Sub0ENSResolver to real Sepolia via $RPC..."
+  echo "  Gateway URL   : $GW"
+  echo "  Signer address: $SIGNER"
+  forge create src/manager/Sub0ENSResolver.sol:Sub0ENSResolver \
+    --rpc-url "$RPC" \
+    --private-key "$PRIVATE_KEY" \
+    --constructor-args "$GW" "$SIGNER" \
+    --broadcast
+
+deploy-ens-resolver-celo:
+  just deploy-ens-resolver celo-sepolia
+
 # ── Verification (run after deploy, separately) ────────────────────────────
 # Sub0 is a proxy — pass the IMPLEMENTATION address, not the proxy.
 # Get it with: cast implementation <PROXY> --rpc-url <RPC>
