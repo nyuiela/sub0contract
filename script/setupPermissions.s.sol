@@ -153,6 +153,14 @@ contract SetupPermissions is Script {
             console2.log("  [WARN] Could not allowlist oracle manager (may need ORACLE_MANAGER_ROLE first)");
         }
 
+        // The Hub verifies oracles by calling oracle.isAllowed(oracleAddress).
+        // Allowlist the oracle contract itself so hub.isAllowed(oracle, ORACLE) passes.
+        try oracle.allowListReporter(address(oracle), true) {
+            console2.log("  [OK] Allowlisted oracle contract address as valid oracle");
+        } catch {
+            console2.log("  [WARN] Could not self-allowlist oracle contract");
+        }
+
         console2.log("  Oracle Manager can:");
         console2.log("    - Allowlist/remove oracle reporters");
         console2.log("    - Manage oracle configurations");
